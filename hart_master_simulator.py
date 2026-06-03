@@ -762,7 +762,7 @@ class HartMasterSim(QMainWindow):
   def __init__(self):
     super().__init__()
     self.setWindowTitle("HART Master Simulator  v1.0")
-    self.setMinimumSize(1200, 750)
+    self.setMinimumSize(1400, 750)
     self.resize(1400, 860)
 
     self._worker = HartWorker()
@@ -1333,8 +1333,8 @@ class HartMasterSim(QMainWindow):
   def _on_error(self, msg: str):
     self._log_info(f"ERROR: {msg}", color=LOG_RX_ERR_COLOR)
 
-  # -- Log helpers --------------------------------------------------------
 
+  # -- Log helpers --------------------------------------------------------
   def _log_frame(self, direction: str, label: str, data: bytes, latency_ms: float):
     if not data:
       self._append_log(f"  [{direction}] {label} — (no data)", LOG_RX_ERR_COLOR)
@@ -1346,13 +1346,13 @@ class HartMasterSim(QMainWindow):
 
     # Optionally hide preamble bytes
     display_data = data
-    if not self._chk_show_preamble.isChecked() and direction == "TX":
-      display_data = bytes(b for b in data if b != 0xFF) if all(b == 0xFF for b in data[:5]) else data
-      preamble_stripped = data[:5] if data[:5] == b"\xff\xff\xff\xff\xff" else b""
-      if preamble_stripped:
-        display_data = data[5:]
+    if not self._chk_show_preamble.isChecked():
+      i = 0
+      while i < len(data) and data[i] == 0xFF:
+        i += 1
+      display_data = data[i:]
 
-    hex_str = " ".join(f"{b:02X}" for b in data)
+    hex_str = " ".join(f"{b:02X}" for b in display_data)
 #    dir_arrow = "-->" if direction == "TX" else "<--"
     dir_arrow = "──▶" if direction == "TX" else "◀──"
 
@@ -1360,70 +1360,96 @@ class HartMasterSim(QMainWindow):
     self._append_log(header, color)
 
     if self._chk_annotate.isChecked():
-      annotation = self._annotate_frame(data, direction)
-      self._append_log(f"  {hex_str}", color)
-      self._append_log(f"  {annotation}", LOG_MUTED)
+      hex_aligned, ann_aligned = self._get_aligned_annotations(display_data, direction)
+      self._append_log(f"  {hex_aligned}", color)
+      self._append_log(f"  {ann_aligned}", LOG_MUTED)
     else:
       self._append_log(f"  {hex_str}", color)
 
     self._session_log.append(f"{header}\n  {hex_str}")
 
-  def _annotate_frame(self, data: bytes, direction: str) -> str:
-    """Produce a byte-by-byte annotation string."""
-    parts = []
+
+  def _get_aligned_annotations(self, data: bytes, direction: str) -> tuple[str, str]:
+    raw_tokens = []
+    ann_tokens = []
     i = 0
+
     # Preambles
     while i < len(data) and data[i] == 0xFF:
-      parts.append("PRE")
+      raw_tokens.append(f"{data[i]:02X}")
+      ann_tokens.append("PRE")
       i += 1
 
-    if i >= len(data):
-      return " ".join(parts)
+    if i < len(data):
+      delimiter = data[i]
+      is_long = (delimiter & 0x80) != 0
+      raw_tokens.append(f"{delimiter:02X}")
+      ann_tokens.append(f"DLM({delimiter:02X})")
+      i += 1
 
-    delimiter = data[i]
-    is_long = (delimiter & 0x80) != 0
-    parts.append(f"DLM({delimiter:02X})")
-    i += 1
-
-    if is_long:
-      for j in range(5):
+      if is_long:
+        for j in range(5):
+          if i < len(data):
+            raw_tokens.append(f"{data[i]:02X}")
+            ann_tokens.append(f"A{j}({data[i]:02X})")
+            i += 1
+      else:
         if i < len(data):
-          parts.append(f"A{j}({data[i]:02X})")
+          raw_tokens.append(f"{data[i]:02X}")
+          ann_tokens.append(f"ADR({data[i]:02X})")
           i += 1
-    else:
+
       if i < len(data):
-        parts.append(f"ADR({data[i]:02X})")
+        raw_tokens.append(f"{data[i]:02X}")
+        ann_tokens.append(f"CMD({data[i]:02X})")
         i += 1
 
-    if i < len(data):
-      parts.append(f"CMD({data[i]:02X})")
-      i += 1
-    if i < len(data):
-      parts.append(f"CNT({data[i]:02X})")
-      cnt = data[i]
-      i += 1
-    else:
-      cnt = 0
+      if i < len(data):
+        raw_tokens.append(f"{data[i]:02X}")
+        cnt = data[i]
+        ann_tokens.append(f"CNT({cnt:02X})")
+        i += 1
+      else:
+        cnt = 0
 
     # For slave responses: first 2 data bytes are status
-    if direction == "RX" and cnt >= 2:
-      if i < len(data):
-        parts.append(f"ST1({data[i]:02X})")
-        i += 1
-      if i < len(data):
-        parts.append(f"ST2({data[i]:02X})")
-        i += 1
-      cnt -= 2
+      if direction == "RX" and cnt >= 2:
+        if i < len(data):
+          raw_tokens.append(f"{data[i]:02X}")
+          ann_tokens.append(f"ST1({data[i]:02X})")
+          i += 1
+        if i < len(data):
+          raw_tokens.append(f"{data[i]:02X}")
+          ann_tokens.append(f"ST2({data[i]:02X})")
+          i += 1
+        cnt -= 2
 
-    for j in range(cnt):
+      for j in range(cnt):
+        if i < len(data):
+          raw_tokens.append(f"{data[i]:02X}")
+          ann_tokens.append(f"D{j}({data[i]:02X})")
+          i += 1
+
       if i < len(data):
-        parts.append(f"D{j}({data[i]:02X})")
+        raw_tokens.append(f"{data[i]:02X}")
+        ann_tokens.append(f"CS({data[i]:02X})")
         i += 1
 
-    if i < len(data):
-      parts.append(f"CS({data[i]:02X})")
+    # Remaining trailing bytes
+    while i < len(data):
+      raw_tokens.append(f"{data[i]:02X}")
+      ann_tokens.append(f"??({data[i]:02X})")
+      i += 1
 
-    return " ".join(parts)
+    hex_out = []
+    ann_out = []
+    for r, a in zip(raw_tokens, ann_tokens):
+      width = max(len(r), len(a))
+      hex_out.append(f"{r:<{width}}")
+      ann_out.append(f"{a:<{width}}")
+
+    return "  ".join(hex_out), "  ".join(ann_out)
+
 
   def _log_info(self, msg: str, color: str = LOG_INFO_COLOR):
     self._append_log(f"  > {msg}", color)
