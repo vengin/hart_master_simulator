@@ -1094,6 +1094,8 @@ class HartMasterSim(QMainWindow):
       self._cb_port.addItems(ports)
       if current in ports:
         self._cb_port.setCurrentText(current)
+      elif "COM3" in ports:
+        self._cb_port.setCurrentText("COM3")
     else:
       self._cb_port.addItem("(no ports)")
 
