@@ -513,22 +513,23 @@ class AutoPollWorker(QThread):
 
 STYLE = """
 QMainWindow {
-  background: #1a1c1e;
+  background: #000000;
 }
 QWidget {
-  background: #1a1c1e;
-  color: #c8cdd3;
+  background: #000000;
+  color: #f1f5f9;
   font-family: 'Courier New', monospace;
   font-size: 12px;
 }
 QGroupBox {
-  border: 1px solid #2e3338;
+  border: 1px solid #475569;
   border-radius: 4px;
   margin-top: 8px;
   padding-top: 4px;
-  font-size: 11px;
-  color: #6b7280;
+  font-size: 12px;
+  color: #ffffff;
   font-family: 'Courier New', monospace;
+  font-weight: bold;
 }
 QGroupBox::title {
   subcontrol-origin: margin;
@@ -536,161 +537,187 @@ QGroupBox::title {
   padding: 0 4px;
 }
 QPushButton {
-  background: #252830;
-  border: 1px solid #3a3f47;
+  background: #1e293b;
+  border: 1px solid #475569;
   border-radius: 3px;
   padding: 5px 12px;
-  color: #c8cdd3;
+  color: #f1f5f9;
   font-family: 'Courier New', monospace;
   font-size: 12px;
 }
 QPushButton:hover {
-  background: #2e3338;
-  border-color: #4a8fff;
-  color: #e0e5ec;
+  background: #334155;
+  border-color: #3b82f6;
+  color: #ffffff;
 }
 QPushButton:pressed {
-  background: #1e2228;
+  background: #0f172a;
 }
 QPushButton:disabled {
-  color: #444;
-  border-color: #2a2e34;
+  color: #475569;
+  border-color: #1e293b;
 }
 QPushButton#btn_connect {
-  background: #1a2e1a;
-  border-color: #2a6e2a;
-  color: #4caf50;
+  background: #064e3b;
+  border-color: #059669;
+  color: #34d399;
 }
 QPushButton#btn_connect:hover {
-  background: #1e3a1e;
-  border-color: #4caf50;
+  background: #047857;
+  border-color: #34d399;
 }
 QPushButton#btn_disconnect {
-  background: #2e1a1a;
-  border-color: #6e2a2a;
-  color: #f44336;
+  background: #7f1d1d;
+  border-color: #dc2626;
+  color: #f87171;
 }
 QPushButton#btn_disconnect:hover {
-  background: #3a1e1e;
-  border-color: #f44336;
+  background: #991b1b;
+  border-color: #f87171;
 }
 QPushButton#btn_send {
-  background: #1a2540;
-  border-color: #2a4a8e;
-  color: #4a8fff;
+  background: #1e3a8a;
+  border-color: #2563eb;
+  color: #60a5fa;
   font-size: 12px;
   padding: 6px 16px;
 }
 QPushButton#btn_send:hover {
-  background: #1e2e50;
-  border-color: #4a8fff;
-  color: #80b0ff;
+  background: #1d4ed8;
+  border-color: #60a5fa;
+  color: #93c5fd;
 }
 QPushButton#btn_poll_start {
-  background: #1a2a20;
-  border-color: #2a6a40;
-  color: #4caf80;
+  background: #064e3b;
+  border-color: #059669;
+  color: #34d399;
 }
 QPushButton#btn_poll_stop {
-  background: #2a1a1a;
-  border-color: #6a2a2a;
-  color: #f07060;
+  background: #7f1d1d;
+  border-color: #dc2626;
+  color: #f87171;
 }
 QComboBox {
-  background: #252830;
-  border: 1px solid #3a3f47;
+  background: #1e293b;
+  border: 1px solid #475569;
   border-radius: 3px;
   padding: 4px 8px;
-  color: #c8cdd3;
+  color: #f1f5f9;
 }
 QComboBox::drop-down {
   border: none;
   width: 20px;
 }
 QComboBox QAbstractItemView {
-  background: #252830;
-  border: 1px solid #3a3f47;
-  selection-background-color: #2e3d5a;
+  background: #1e293b;
+  border: 1px solid #475569;
+  selection-background-color: #2563eb;
 }
 QSpinBox, QDoubleSpinBox, QLineEdit {
-  background: #252830;
-  border: 1px solid #3a3f47;
+  background: #1e293b;
+  border: 1px solid #475569;
   border-radius: 3px;
   padding: 4px 8px;
-  color: #c8cdd3;
+  color: #f1f5f9;
 }
 QSpinBox:focus, QLineEdit:focus {
-  border-color: #4a8fff;
+  border-color: #3b82f6;
 }
 QTextEdit {
-  background: #0f1114;
-  border: 1px solid #2e3338;
+  background: #000000;
+  border: 1px solid #334155;
   border-radius: 3px;
-  color: #c8cdd3;
+  color: #f1f5f9;
   font-family: 'Courier New', monospace;
-  font-size: 11px;
+  font-size: 14px;
 }
 QTabWidget::pane {
-  border: 1px solid #2e3338;
-  background: #1a1c1e;
+  border: 1px solid #334155;
+  background: #000000;
+}
+QTabBar {
+  /* Fix for QTabBar (Tabs): Force transparent focus indicator */
+  outline: 0;
+}
+QTabBar::tab:focus {
+  /* Instead of a dotted box, indicate focus with a clean colored border */
+  border-top: 3px solid #3b82f6;
+}
+/* Fix for QAbstractItemView (Tables, Lists, Trees) */
+QAbstractItemView {
+  outline: 0;
+}
+
+/* Fix for Buttons and Checkboxes */
+QPushButton, QCheckBox, QRadioButton, QComboBox {
+  /* Override focus visual representation by explicitly defining focus styles */
+  border: 1px solid #475569;
+}
+
+QPushButton:focus, QCheckBox:focus, QComboBox:focus {
+  /* Highlight the active control using a distinct border color instead of a dotted rect */
+  border-color: #3b82f6;
 }
 QTabBar::tab {
-  background: #252830;
-  border: 1px solid #2e3338;
+  background: #1e293b;
+  border: 1px solid #334155;
   border-bottom: none;
-  padding: 5px 14px;
-  color: #6b7280;
-  font-size: 11px;
-  font-family: 'Courier New', monospace;
+  padding: 8px 14px;             /* Reduced horizontal padding to prevent truncation */
+  min-width: 120px;              /* Explicit minimum width to fit text layout */
+  color: #cbd5e1;
+  font-size: 13px;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-weight: bold;
 }
 QTabBar::tab:selected {
-  background: #1a1c1e;
-  color: #c8cdd3;
-  border-top: 2px solid #4a8fff;
+  background: #000000;
+  color: #ffffff;
+  border-top: 3px solid #3b82f6;
 }
 QTabBar::tab:hover {
-  color: #a0a8b4;
+  color: #ffffff;
+  background: #273549;
 }
 QLabel {
-  color: #6b7280;
-  font-size: 11px;
+  color: #ffffff;
+  font-size: 12px;
 }
 QLabel#val {
-  color: #c8cdd3;
+  color: #f1f5f9;
   font-size: 12px;
 }
 QLabel#bright {
-  color: #4a8fff;
+  color: #3b82f6;
   font-size: 12px;
 }
 QLabel#ok {
-  color: #4caf50;
+  color: #34d399;
 }
 QLabel#warn {
-  color: #ff9800;
+  color: #fbbf24;
 }
 QLabel#err {
-  color: #f44336;
+  color: #f87171;
 }
 QCheckBox {
-  color: #c8cdd3;
+  color: #f1f5f9;
 }
 QStatusBar {
-  background: #0f1114;
-  color: #6b7280;
-  border-top: 1px solid #2e3338;
+  background: #000000;
+  color: #94a3b8;
+  border-top: 1px solid #334155;
   font-size: 11px;
 }
 QSplitter::handle {
-  background: #2e3338;
+  background: #334155;
 }
 QScrollBar:vertical {
-  background: #1a1c1e;
+  background: #000000;
   width: 8px;
   border: none;
 }
 QScrollBar::handle:vertical {
-  background: #3a3f47;
+  background: #475569;
   border-radius: 4px;
   min-height: 20px;
 }
@@ -698,29 +725,35 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
   height: 0;
 }
 QTableWidget {
-  background: #0f1114;
-  gridline-color: #2e3338;
-  border: 1px solid #2e3338;
+  background: #000000;
+  gridline-color: #334155;
+  border: 1px solid #334155;
+  /* Add explicit background for alternating rows to prevent bright white/grey mash */
+  qproperty-alternatingRowColors: true;
 }
 QTableWidget::item {
   padding: 3px 6px;
 }
+/* Crucial fix for contrast: explicit background for alternating rows */
+QTableWidget::item:alternate {
+  background: #0f172a;
+}
 QHeaderView::section {
-  background: #252830;
-  border: 1px solid #2e3338;
+  background: #1e293b;
+  border: 1px solid #334155;
   padding: 4px 6px;
-  color: #6b7280;
+  color: #94a3b8;
   font-size: 11px;
 }
 """
 
 # Color tags for log text
-LOG_TX_COLOR = "#4a8fff"
-LOG_RX_OK_COLOR = "#4caf50"
-LOG_RX_ERR_COLOR = "#f44336"
-LOG_INFO_COLOR = "#ff9800"
-LOG_DECODED_COLOR = "#b0d0ff"
-LOG_MUTED = "#4a5060"
+LOG_TX_COLOR = "#60a5fa"
+LOG_RX_OK_COLOR = "#34d399"
+LOG_RX_ERR_COLOR = "#f87171"
+LOG_INFO_COLOR = "#fbbf24"
+LOG_DECODED_COLOR = "#93c5fd"
+LOG_MUTED = "#94a3b8"
 
 
 # --- MAIN WINDOW ------------------------------------------------------------
@@ -795,6 +828,7 @@ class HartMasterSim(QMainWindow):
     self._tabs.addTab(self._build_decode_tab(), "Decoded Response")
     self._tabs.addTab(self._build_custom_tab(), "Custom Frame")
     self._tabs.addTab(self._build_timing_tab(), "Timing / Stats")
+    self._tabs.setUsesScrollButtons(True)
     right_layout.addWidget(self._tabs)
     splitter.addWidget(right)
 
@@ -983,7 +1017,10 @@ class HartMasterSim(QMainWindow):
 
     self._log = QTextEdit()
     self._log.setReadOnly(True)
-    self._log.setFont(QFont("Courier New", 11))
+    # Force document-level layout font properties
+    font = QFont("Consolas", 10)
+    self._log.setFont(font)
+    self._log.document().setDefaultFont(font)
     layout.addWidget(self._log)
 
     return w
@@ -1280,7 +1317,7 @@ class HartMasterSim(QMainWindow):
     cs_color = LOG_RX_OK_COLOR if parsed.get("cs_ok") else LOG_RX_ERR_COLOR
 
     lines = [
-      (f"  └- CMD={cmd}  st1=0x{parsed['st1']:02X}  st2=0x{parsed['st2']:02X}  "
+      (f"  └─ CMD={cmd}  st1=0x{parsed['st1']:02X}  st2=0x{parsed['st2']:02X}  "
        f"{cs_status}  latency={latency:.0f}ms", cs_color),
       (f"     Status: {parsed['status_text']}", LOG_DECODED_COLOR),
     ]
@@ -1316,7 +1353,8 @@ class HartMasterSim(QMainWindow):
         display_data = data[5:]
 
     hex_str = " ".join(f"{b:02X}" for b in data)
-    dir_arrow = "-->" if direction == "TX" else "<--"
+#    dir_arrow = "-->" if direction == "TX" else "<--"
+    dir_arrow = "──▶" if direction == "TX" else "◀──"
 
     header = f"{ts_part}{dir_arrow} {direction}  {label}  ({len(data)}B)"
     self._append_log(header, color)
@@ -1388,14 +1426,17 @@ class HartMasterSim(QMainWindow):
     return " ".join(parts)
 
   def _log_info(self, msg: str, color: str = LOG_INFO_COLOR):
-    self._append_log(f"  ⟫ {msg}", color)
-    self._session_log.append(f"  ⟫ {msg}")
+    self._append_log(f"  > {msg}", color)
+    self._session_log.append(f"  > {msg}")
 
   def _append_log(self, text: str, color: str = "#c8cdd3"):
     cursor = self._log.textCursor()
     cursor.movePosition(QTextCursor.End)
     fmt = cursor.charFormat()
     fmt.setForeground(QColor(color))
+    fmt.setFontFamily("Consolas")
+    fmt.setFontPointSize(10)
+
     cursor.setCharFormat(fmt)
     cursor.insertText(text + "\n")
     self._log.setTextCursor(cursor)
@@ -1442,20 +1483,23 @@ class HartMasterSim(QMainWindow):
     for i, (k, v) in enumerate(rows):
       item_k = QTableWidgetItem(k)
       item_v = QTableWidgetItem(v)
-      item_k.setForeground(QColor("#6b7280"))
+
+      # Boosted key column visibility from #94a3b8 (dark gray) to #cbd5e1 (light gray)
+      item_k.setForeground(QColor("#cbd5e1"))
+
       if k.startswith("--") or k == "":
-        item_k.setForeground(QColor("#4a8fff"))
-        item_v.setForeground(QColor("#4a8fff"))
+        item_k.setForeground(QColor("#60a5fa"))
+        item_v.setForeground(QColor("#60a5fa"))
       elif "FAIL" in v or "ERROR" in v:
-        item_v.setForeground(QColor("#f44336"))
+        item_v.setForeground(QColor("#f87171"))
       elif v.startswith("✓"):
-        item_v.setForeground(QColor("#4caf50"))
+        # Boosted green from #34d399 to high-visibility #4ade80
+        item_v.setForeground(QColor("#4ade80"))
       else:
-        item_v.setForeground(QColor("#c8cdd3"))
+        item_v.setForeground(QColor("#f1f5f9"))
+
       self._decode_table.setItem(i, 0, item_k)
       self._decode_table.setItem(i, 1, item_v)
-
-    self._tabs.setCurrentIndex(1)  # Switch to decoded tab
 
   def _refresh_timing_table(self):
     self._timing_table.setRowCount(0)
