@@ -1481,6 +1481,7 @@ class HartMasterSim(QMainWindow):
       cursor.removeSelectedText()
       self._log_lines -= 50
 
+
   def _populate_decode_table(self, parsed: dict):
     self._decode_table.setRowCount(0)
 
@@ -1497,7 +1498,13 @@ class HartMasterSim(QMainWindow):
     dev_flags = parsed.get("dev_flags", [])
     rows.append(("Device flags", ", ".join(dev_flags) if dev_flags else "(none)"))
 
-    cs_label = "✓ OK" if parsed.get("cs_ok") else f"✗ FAIL (got 0x{parsed.get('checksum_byte', 0):02X}, expected 0x{parsed.get('expected_cs', 0):02X})"
+    expected_cs_val = parsed.get("expected_cs")
+    checksum_byte_val = parsed.get("checksum_byte")
+
+    expected_cs_hex = f"0x{expected_cs_val:02X}" if expected_cs_val is not None else "None"
+    checksum_byte_hex = f"0x{checksum_byte_val:02X}" if checksum_byte_val is not None else "None"
+
+    cs_label = "✓ OK" if parsed.get("cs_ok") else f"✗ FAIL (got {checksum_byte_hex}, expected {expected_cs_hex})"
     rows.append(("Checksum", cs_label))
     rows.append(("Preambles received", str(parsed.get("preamble_count", "?"))))
     rows.append(("Latency", f"{parsed.get('_latency_ms', 0):.1f} ms"))
@@ -1532,6 +1539,7 @@ class HartMasterSim(QMainWindow):
 
       self._decode_table.setItem(i, 0, item_k)
       self._decode_table.setItem(i, 1, item_v)
+
 
   def _refresh_timing_table(self):
     self._timing_table.setRowCount(0)
