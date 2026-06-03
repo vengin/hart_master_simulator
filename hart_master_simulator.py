@@ -28,7 +28,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QMutex
 from PyQt5.QtGui import QFont, QColor, QPalette, QTextCursor, QFontDatabase
 
 
-# ─── HART PROTOCOL CONSTANTS ────────────────────────────────────────────────
+# --- HART PROTOCOL CONSTANTS ------------------------------------------------
 
 HART_BAUD = 1200
 HART_PARITY = serial.PARITY_ODD
@@ -118,7 +118,7 @@ KNOWN_MANUFACTURERS = {
 }
 
 
-# ─── HART FRAME ENGINE ──────────────────────────────────────────────────────
+# --- HART FRAME ENGINE ------------------------------------------------------
 
 def calc_checksum(data: bytes) -> int:
   cs = 0
@@ -231,7 +231,7 @@ def parse_response(raw: bytes) -> dict | None:
     return {"error": str(e), "raw": raw}
 
 
-# ─── COMMAND DECODERS ───────────────────────────────────────────────────────
+# --- COMMAND DECODERS -------------------------------------------------------
 
 def decode_cmd0(payload: bytes) -> dict:
   if len(payload) < 12:
@@ -377,7 +377,7 @@ def decode_response(cmd: int, payload: bytes) -> dict | None:
   return fn(payload) if fn else None
 
 
-# ─── SERIAL WORKER THREAD ───────────────────────────────────────────────────
+# --- SERIAL WORKER THREAD ---------------------------------------------------
 
 class HartWorker(QThread):
   frame_logged = pyqtSignal(str, str, bytes, float)  # dir, label, data, latency_ms
@@ -484,7 +484,7 @@ class HartWorker(QThread):
     self.wait()
 
 
-# ─── AUTO-POLL WORKER ───────────────────────────────────────────────────────
+# --- AUTO-POLL WORKER -------------------------------------------------------
 
 class AutoPollWorker(QThread):
   poll_tick = pyqtSignal(int, int, bytes)  # address, command, data
@@ -509,7 +509,7 @@ class AutoPollWorker(QThread):
     self.wait()
 
 
-# ─── STYLE ──────────────────────────────────────────────────────────────────
+# --- STYLE ------------------------------------------------------------------
 
 STYLE = """
 QMainWindow {
@@ -723,7 +723,7 @@ LOG_DECODED_COLOR = "#b0d0ff"
 LOG_MUTED = "#4a5060"
 
 
-# ─── MAIN WINDOW ────────────────────────────────────────────────────────────
+# --- MAIN WINDOW ------------------------------------------------------------
 
 class HartMasterSim(QMainWindow):
   def __init__(self):
@@ -757,7 +757,7 @@ class HartMasterSim(QMainWindow):
     self._port_timer.timeout.connect(self._refresh_ports)
     self._port_timer.start(3000)
 
-  # ── UI construction ────────────────────────────────────────────────────
+  # -- UI construction ----------------------------------------------------
 
   def _build_ui(self):
     central = QWidget()
@@ -1084,7 +1084,7 @@ class HartMasterSim(QMainWindow):
     layout.addStretch()
     return w
 
-  # ── Slots ──────────────────────────────────────────────────────────────
+  # -- Slots --------------------------------------------------------------
 
   def _refresh_ports(self):
     current = self._cb_port.currentText()
@@ -1242,7 +1242,7 @@ class HartMasterSim(QMainWindow):
         f.write("\n".join(self._session_log))
       self._log_info(f"Log saved: {path}")
 
-  # ── Signal handlers ────────────────────────────────────────────────────
+  # -- Signal handlers ----------------------------------------------------
 
   def _on_frame_logged(self, direction: str, label: str, data: bytes, latency_ms: float):
     self._log_frame(direction, label, data, latency_ms)
@@ -1278,7 +1278,7 @@ class HartMasterSim(QMainWindow):
     cs_color = LOG_RX_OK_COLOR if parsed.get("cs_ok") else LOG_RX_ERR_COLOR
 
     lines = [
-      (f"  └─ CMD={cmd}  st1=0x{parsed['st1']:02X}  st2=0x{parsed['st2']:02X}  "
+      (f"  └- CMD={cmd}  st1=0x{parsed['st1']:02X}  st2=0x{parsed['st2']:02X}  "
        f"{cs_status}  latency={latency:.0f}ms", cs_color),
       (f"     Status: {parsed['status_text']}", LOG_DECODED_COLOR),
     ]
@@ -1294,7 +1294,7 @@ class HartMasterSim(QMainWindow):
   def _on_error(self, msg: str):
     self._log_info(f"ERROR: {msg}", color=LOG_RX_ERR_COLOR)
 
-  # ── Log helpers ────────────────────────────────────────────────────────
+  # -- Log helpers --------------------------------------------------------
 
   def _log_frame(self, direction: str, label: str, data: bytes, latency_ms: float):
     if not data:
@@ -1314,7 +1314,7 @@ class HartMasterSim(QMainWindow):
         display_data = data[5:]
 
     hex_str = " ".join(f"{b:02X}" for b in data)
-    dir_arrow = "──▶" if direction == "TX" else "◀──"
+    dir_arrow = "-->" if direction == "TX" else "<--"
 
     header = f"{ts_part}{dir_arrow} {direction}  {label}  ({len(data)}B)"
     self._append_log(header, color)
@@ -1431,7 +1431,7 @@ class HartMasterSim(QMainWindow):
     decoded = parsed.get("_decoded")
     if decoded:
       rows.append(("", ""))  # separator
-      rows.append(("── DECODED FIELDS ──", ""))
+      rows.append(("-- DECODED FIELDS --", ""))
       for k, v in decoded.items():
         if not k.startswith("_"):
           rows.append((k, str(v)))
@@ -1441,7 +1441,7 @@ class HartMasterSim(QMainWindow):
       item_k = QTableWidgetItem(k)
       item_v = QTableWidgetItem(v)
       item_k.setForeground(QColor("#6b7280"))
-      if k.startswith("──") or k == "":
+      if k.startswith("--") or k == "":
         item_k.setForeground(QColor("#4a8fff"))
         item_v.setForeground(QColor("#4a8fff"))
       elif "FAIL" in v or "ERROR" in v:
@@ -1481,7 +1481,7 @@ class HartMasterSim(QMainWindow):
     event.accept()
 
 
-# ─── ENTRY POINT ────────────────────────────────────────────────────────────
+# --- ENTRY POINT ------------------------------------------------------------
 
 def main():
   app = QApplication(sys.argv)
