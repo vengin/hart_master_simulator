@@ -1390,30 +1390,30 @@ class HartMasterSim(QMainWindow):
       delimiter = data[i]
       is_long = (delimiter & 0x80) != 0
       raw_tokens.append(f"{delimiter:02X}")
-      ann_tokens.append(f"DLM({delimiter:02X})")
+      ann_tokens.append("DLM")
       i += 1
 
       if is_long:
         for j in range(5):
           if i < len(data):
             raw_tokens.append(f"{data[i]:02X}")
-            ann_tokens.append(f"A{j}({data[i]:02X})")
+            ann_tokens.append(f"A{j}")
             i += 1
       else:
         if i < len(data):
           raw_tokens.append(f"{data[i]:02X}")
-          ann_tokens.append(f"ADR({data[i]:02X})")
+          ann_tokens.append("ADR")
           i += 1
 
       if i < len(data):
         raw_tokens.append(f"{data[i]:02X}")
-        ann_tokens.append(f"CMD({data[i]:02X})")
+        ann_tokens.append("CMD")
         i += 1
 
       if i < len(data):
         raw_tokens.append(f"{data[i]:02X}")
         cnt = data[i]
-        ann_tokens.append(f"CNT({cnt:02X})")
+        ann_tokens.append("CNT")
         i += 1
       else:
         cnt = 0
@@ -1422,29 +1422,29 @@ class HartMasterSim(QMainWindow):
       if direction == "RX" and cnt >= 2:
         if i < len(data):
           raw_tokens.append(f"{data[i]:02X}")
-          ann_tokens.append(f"ST1({data[i]:02X})")
+          ann_tokens.append("ST1")
           i += 1
         if i < len(data):
           raw_tokens.append(f"{data[i]:02X}")
-          ann_tokens.append(f"ST2({data[i]:02X})")
+          ann_tokens.append("ST2")
           i += 1
         cnt -= 2
 
       for j in range(cnt):
         if i < len(data):
           raw_tokens.append(f"{data[i]:02X}")
-          ann_tokens.append(f"D{j}({data[i]:02X})")
+          ann_tokens.append(f"D{j}")
           i += 1
 
       if i < len(data):
         raw_tokens.append(f"{data[i]:02X}")
-        ann_tokens.append(f"CS({data[i]:02X})")
+        ann_tokens.append("CS")
         i += 1
 
     # Remaining trailing bytes
     while i < len(data):
       raw_tokens.append(f"{data[i]:02X}")
-      ann_tokens.append(f"??({data[i]:02X})")
+      ann_tokens.append("??")
       i += 1
 
     hex_out = []
