@@ -745,6 +745,12 @@ QHeaderView::section {
   color: #94a3b8;
   font-size: 11px;
 }
+/* Fix for Buttons and Checkboxes outline*/
+QPushButton, QCheckBox, QRadioButton, QComboBox {
+  /* Override focus visual representation by explicitly defining focus styles */
+  border: 1px solid #475569;
+  outline: 0;
+}
 """
 
 # Color tags for log text
