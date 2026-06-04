@@ -1685,9 +1685,10 @@ class HartMasterSim(QMainWindow):
       "Text files (*.txt)"
     )
     if path:
-      with open(path, "w") as f:
+      with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(self._session_log))
       self._log_info(f"Log saved: {path}")
+
 
   # -- Signal handlers ----------------------------------------------------
 
