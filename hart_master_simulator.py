@@ -1807,16 +1807,16 @@ class HartMasterSim(QMainWindow):
     self._session_log.clear()
 
   def _save_log(self):
-    path, _ = QFileDialog.getSaveFileName(
-      self, "Save HART log", f"hart_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-      "Text files (*.txt)"
-    )
-    if path:
-      with open(path, "w") as f:
+    default_name = f"hart_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    filename, _ = QFileDialog.getSaveFileName(self, "Save Session Log", default_name, "Text Files (*.txt);;All Files (*)")
+    if not filename:
+      return
+    try:
+      with open(filename, "w", encoding="utf-8") as f:
         f.write("\n".join(self._session_log))
-      self._log_info(f"Log saved: {path}")
-
-
+      self._log_info(f"Log saved to {filename}")
+    except Exception as e:
+      QMessageBox.critical(self, "Save Error", f"Could not save log: {e}")
   # -- Signal handlers ----------------------------------------------------
 
   def _on_frame_logged(self, direction: str, label: str, data: bytes, latency_ms: float):
