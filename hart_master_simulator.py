@@ -607,7 +607,7 @@ class SnifferWorker(QThread):
       for b in stripped[:-1]:
         cs_calc ^= b
       cs_ok = cs_calc == stripped[-1]
-      info_parts.append(f"CS={'OK' if cs_ok else 'FAIL'}")
+      info_parts.append(f"CheckSum={'OK' if cs_ok else 'FAIL'}")
 
     info = "  |  ".join(info_parts)
     self.frame_sniffed.emit(raw, info)
@@ -1405,6 +1405,21 @@ class HartMasterSim(QMainWindow):
     self._lbl_conn_status.setAlignment(Qt.AlignCenter)
     layout.addWidget(self._lbl_conn_status, 5, 0, 1, 3)
 
+    sep = QFrame()
+    sep.setFrameShape(QFrame.HLine)
+    sep.setFrameShadow(QFrame.Sunken)
+    layout.addWidget(sep, 6, 0, 1, 3)
+
+    self._btn_sniff = QPushButton("\u25b6 Start sniffer")
+    self._btn_sniff.setToolTip(
+      "Passively read bus traffic without sending frames.\n"
+      "Requires port to be connected (open) first.\n"
+      "Use a hardware tap if the port is owned by another process.")
+    self._btn_sniff.clicked.connect(self._toggle_sniffer)
+    layout.addWidget(self._btn_sniff, 7, 0, 1, 3)
+
+    self._sniffing = False
+
     return grp
 
   def _build_address_panel(self):
@@ -1596,18 +1611,6 @@ class HartMasterSim(QMainWindow):
     btn_row.addWidget(btn_inject_bad)
 
     layout.addLayout(btn_row)
-
-    # Sniffer mode
-    sep = QFrame()
-    sep.setFrameShape(QFrame.HLine)
-    sep.setFrameShadow(QFrame.Sunken)
-    layout.addWidget(sep)
-
-    layout.addWidget(QLabel("Passive sniffer mode — parse whatever arrives on the bus:"))
-    self._btn_sniff = QPushButton("▶ Start sniffer")
-    self._btn_sniff.clicked.connect(self._toggle_sniffer)
-    layout.addWidget(self._btn_sniff)
-    self._sniffing = False
 
     layout.addStretch()
     return w
