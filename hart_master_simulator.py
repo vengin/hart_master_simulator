@@ -1820,6 +1820,9 @@ class HartMasterSim(QMainWindow):
   # -- Signal handlers ----------------------------------------------------
 
   def _on_frame_logged(self, direction: str, label: str, data: bytes, latency_ms: float):
+    # Add empty line before a new TX frame to separate transfer pairs
+    if direction == "TX":
+      self._append_log("")
     self._log_frame(direction, label, data, latency_ms)
 
   def _on_response(self, parsed: dict):
@@ -1893,7 +1896,6 @@ class HartMasterSim(QMainWindow):
       display_data = data[i:]
 
     hex_str = " ".join(f"{b:02X}" for b in display_data)
-#    dir_arrow = "-->" if direction == "TX" else "<--"
     dir_arrow = "──▶" if direction == "TX" else "◀──"
 
     header = f"{ts_part}{dir_arrow} {direction}  {label}  ({len(data)}B)"
