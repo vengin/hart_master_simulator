@@ -1319,13 +1319,17 @@ class HartMasterSim(QMainWindow):
       self._lbl_unique_learned.setStyleSheet("color: #4caf50;")
 
     # Append parsed info to log
-    cs_status = "✓ CS OK" if parsed.get("cs_ok") else "✗ CS FAIL"
+    cs_status = "✓ CheskSum OK" if parsed.get("cs_ok") else "✗ CheskSum FAIL"
     cs_color = LOG_RX_OK_COLOR if parsed.get("cs_ok") else LOG_RX_ERR_COLOR
+
+    status_text = parsed['status_text']
+    if not parsed.get("cs_ok"):
+      status_text += ", CheckSum FAIL"
 
     lines = [
       (f"  └─ CMD={cmd}  st1=0x{parsed['st1']:02X}  st2=0x{parsed['st2']:02X}  "
        f"{cs_status}  latency={latency:.0f}ms", cs_color),
-      (f"     Status: {parsed['status_text']}", LOG_DECODED_COLOR),
+      (f"     Status: {status_text}", LOG_DECODED_COLOR if parsed.get("cs_ok") else LOG_RX_ERR_COLOR),
     ]
     if parsed["dev_flags"]:
       lines.append((f"     Device: {', '.join(parsed['dev_flags'])}", LOG_INFO_COLOR))
