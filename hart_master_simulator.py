@@ -1064,17 +1064,17 @@ SCENARIOS = {
        "use_long": False, "preambles": 5, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
        "note": "Checksum XOR'd with 0xFF - slave must discard.",
-       "_corrupt_cs": True},
+       "_corrupt_cs": True, "expect_no_response": True},
       {"label": "BAD CheckSum frame #2", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 5, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
        "note": "Second bad-CS frame.",
-       "_corrupt_cs": True},
+       "_corrupt_cs": True, "expect_no_response": True},
       {"label": "BAD CheckSum frame #3", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 5, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
        "note": "Third bad-CS frame.",
-       "_corrupt_cs": True},
+       "_corrupt_cs": True, "expect_no_response": True},
       {"label": "VALID Cmd0 - recovery check", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 5, "master": "primary",
        "delay_pre": 0.8, "delay_post": 0.5,
@@ -1329,6 +1329,7 @@ SCENARIOS = {
       {"label": "Cmd0 - broadcast addr 63 (expect NO response)", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 5, "master": "primary",
        "_addr": 63,
+       "expect_no_response": True,
        "delay_pre": 0.5, "delay_post": 0.6,
        "note": "Broadcast addr 0x3F. Conformant slave MUST NOT respond. Timeout = pass."},
       {"label": "Cmd0 - normal addr (recovery check)", "cmd": 0, "data": b"",
@@ -1380,7 +1381,8 @@ class ScenarioRunner(QThread):
       master   = step.get("master", "primary")
       delay_pre  = step.get("delay_pre", 0.3)
       delay_post = step.get("delay_post", 0.2)
-      corrupt_cs = step.get("_corrupt_cs", False)
+      corrupt_cs        = step.get("_corrupt_cs", False)
+      expect_no_resp    = step.get("expect_no_response", False)
 
       self.step_started.emit(idx, label, note)
 
@@ -1423,7 +1425,13 @@ class ScenarioRunner(QThread):
         self.step_done.emit(idx, label, frame, raw, latency_ms)
 
         parsed = parse_response(raw)
-        if parsed and parsed.get("ok"):
+        if expect_no_resp:
+          # Silence = pass; any response = fail (bus collision / non-conformant slave)
+          if not raw:
+            ok_count += 1
+          else:
+            fail_count += 1
+        elif parsed and parsed.get("ok"):
           ok_count += 1
           # Update unique ID if we learned it
           if cmd == 0 and not corrupt_cs:
@@ -1713,7 +1721,7 @@ class HartMasterSim(QMainWindow):
     tb.addWidget(self._chk_show_preamble)
 
     self._chk_timestamps = QCheckBox("Timestamps")
-    self._chk_timestamps.setChecked(False)
+    self._chk_timestamps.setChecked(True)
     tb.addWidget(self._chk_timestamps)
 
     self._chk_annotate = QCheckBox("Annotate bytes")
@@ -2563,22 +2571,48 @@ class HartMasterSim(QMainWindow):
     self._log_frame("TX", label, tx, 0.0)
     self._log_frame("RX", label, rx, latency_ms)
 
+    # Look up expect_no_response flag from current scenario's step list
+    sc_name = self._cb_scenario.currentText()
+    steps = SCENARIOS.get(sc_name, {}).get("steps", [])
+    expect_no_resp = steps[idx].get("expect_no_response", False) if idx < len(steps) else False
+
     parsed = parse_response(rx)
-    ok = parsed is not None and parsed.get("ok", False)
 
-    # Learn unique ID from scenario steps too
-    if ok and parsed.get("cmd") == 0:
-      decoded = decode_response(0, parsed.get("payload", b""))
-      if decoded and "_unique_id" in decoded:
-        uid = decoded["_unique_id"]
-        self._unique_id = uid
-        uid_str = " ".join(f"{b:02X}" for b in uid)
-        self._le_unique_id.setText(uid_str)
-        self._lbl_unique_learned.setText(f"✓ Learned: {uid_str}")
-        self._lbl_unique_learned.setStyleSheet("color: #4caf50;")
+    if expect_no_resp:
+      ok = not rx  # silence = correct behavior
+      result_text = "✓ SILENT (expected)" if ok else "✗ GOT RESPONSE (should be silent)"
+      result_color = "#4ade80" if ok else "#f87171"
+      if not ok:
+        self._scenario_hints.append(
+          f"  ⚠ Step {idx+1}: Slave responded to broadcast/silence-expected frame.\n"
+          f"    This causes bus collisions in multi-drop. Check address filtering.\n")
+    else:
+      ok = parsed is not None and parsed.get("ok", False)
 
-    result_text = "✓ OK" if ok else ("✗ NO RESPONSE" if not rx else "✗ PARSE ERR")
-    result_color = "#4ade80" if ok else "#f87171"
+      # Learn unique ID from scenario steps too
+      if ok and parsed.get("cmd") == 0:
+        decoded = decode_response(0, parsed.get("payload", b""))
+        if decoded and "_unique_id" in decoded:
+          uid = decoded["_unique_id"]
+          self._unique_id = uid
+          uid_str = " ".join(f"{b:02X}" for b in uid)
+          self._le_unique_id.setText(uid_str)
+          self._lbl_unique_learned.setText(f"✓ Learned: {uid_str}")
+          self._lbl_unique_learned.setStyleSheet("color: #4caf50;")
+
+      result_text = "✓ OK" if ok else ("✗ NO RESPONSE" if not rx else "✗ PARSE ERR")
+      result_color = "#4ade80" if ok else "#f87171"
+
+      if not ok:
+        hint = ""
+        if not rx:
+          hint = "No response - check: baud/parity (1200 8O1), preamble count, address, wiring."
+        elif parsed and not parsed.get("cs_ok"):
+          hint = "Response received but checksum failed - possible line noise or half-duplex echo."
+        elif parsed and "error" in parsed:
+          hint = f"Parse error: {parsed['error']}"
+        if hint:
+          self._scenario_hints.append(f"  ⚠ Step {idx+1}: {hint}\n")
 
     result_item = self._scenario_table.item(idx, 2)
     if not result_item:
@@ -2593,17 +2627,6 @@ class HartMasterSim(QMainWindow):
       self._scenario_table.setItem(idx, 3, lat_item)
     lat_item.setText(f"{latency_ms:.0f} ms")
     lat_item.setForeground(QColor("#e2e8f0"))
-
-    if not ok:
-      hint = ""
-      if not rx:
-        hint = "No response - check: baud/parity (1200 8O1), preamble count, address, wiring."
-      elif parsed and not parsed.get("cs_ok"):
-        hint = "Response received but checksum failed - possible line noise or half-duplex echo."
-      elif parsed and "error" in parsed:
-        hint = f"Parse error: {parsed['error']}"
-      if hint:
-        self._scenario_hints.append(f"  ⚠ Step {idx+1}: {hint}\n")
 
   def _on_scenario_step_error(self, idx: int, label: str, msg: str):
     self._scenario_progress.setValue(idx + 1)
