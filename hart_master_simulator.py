@@ -2396,8 +2396,8 @@ class HartMasterSim(QMainWindow):
       lbl_item = QTableWidgetItem(step.get("label", ""))
       lbl_item.setForeground(QColor("#f1f5f9"))
       self._scenario_table.setItem(i, 1, lbl_item)
-      self._scenario_table.setItem(i, 2, QTableWidgetItem("—"))
-      self._scenario_table.setItem(i, 3, QTableWidgetItem("—"))
+      self._scenario_table.setItem(i, 2, QTableWidgetItem("-"))
+      self._scenario_table.setItem(i, 3, QTableWidgetItem("-"))
     self._scenario_progress.setValue(0)
     self._scenario_progress.setMaximum(max(len(steps), 1))
     self._lbl_scenario_summary.setText(f"{len(steps)} steps - press RUN to start")
@@ -2447,7 +2447,7 @@ class HartMasterSim(QMainWindow):
     self._btn_scenario_abort.setEnabled(True)
     self._lbl_scenario_summary.setText(f"Running: {name}")
 
-    self._log_info(f"═══ SCENARIO START: {name} ═══")
+    self._log_info(f"\n\n═══ SCENARIO START: {name} ═══")
     self._scenario_runner.start()
 
   def _run_all_scenarios(self):
@@ -2464,10 +2464,10 @@ class HartMasterSim(QMainWindow):
       seed = int(time.time() * 1000) & 0xFFFFFFFF
       rng = random.Random(seed)
       rng.shuffle(names)
-      self._log_info(f"═══ RUN ALL: random order (seed={seed}) ═══")
+      self._log_info(f"\n\n═══ RUN ALL: random order (seed={seed}) ═══")
       self._log_info("Order: " + " → ".join(f"#{list(SCENARIOS.keys()).index(n)+1}" for n in names))
     else:
-      self._log_info("═══ RUN ALL: sequential order ═══")
+      self._log_info("\n\n═══ RUN ALL: sequential order ═══")
 
     self._run_all_queue = names
     self._run_all_total = len(names)
@@ -2528,7 +2528,7 @@ class HartMasterSim(QMainWindow):
     self._btn_scenario_run_all.setEnabled(False)
     self._btn_scenario_abort.setEnabled(True)
     self._lbl_scenario_summary.setText(f"Running: {name}")
-    self._log_info(f"═══ SCENARIO START [{current}/{self._run_all_total}]: {name} ═══")
+    self._log_info(f"\n\n═══ SCENARIO START [{current}/{self._run_all_total}]: {name} ═══")
     self._scenario_runner.start()
 
   def _on_run_all_step_done(self, ok_count: int, fail_count: int):
@@ -2554,6 +2554,8 @@ class HartMasterSim(QMainWindow):
     self._log_info("═══ SCENARIO ABORTED ═══")
 
   def _on_scenario_step_start(self, idx: int, label: str, note: str):
+    if idx > 0:
+      self._append_log("")     # Add empty line before each new step
     self._log_info(f"  [{idx+1}] {label}")
     if note:
       self._scenario_hints.append(f"[{idx+1}] {label}\n    → {note}\n")
