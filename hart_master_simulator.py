@@ -515,104 +515,6 @@ class AutoPollWorker(QThread):
     self.wait()
 
 
-# --- SNIFFER WORKER ---------------------------------------------------------
-
-class SnifferWorker(QThread):
-  """Passively drains the serial port and emits every complete HART frame found."""
-  frame_sniffed = pyqtSignal(bytes, str)  # raw_bytes, info_str
-
-  def __init__(self, port: serial.Serial):
-    super().__init__()
-    self._port = port
-    self._running = False
-
-  def stop(self):
-    self._running = False
-    self.wait()
-
-  def run(self):
-    self._running = True
-    buf = b""
-    last_activity = time.perf_counter()
-
-    while self._running:
-      try:
-        waiting = self._port.in_waiting
-      except Exception:
-        time.sleep(0.05)
-        continue
-
-      if waiting:
-        try:
-          chunk = self._port.read(waiting)
-        except Exception:
-          time.sleep(0.05)
-          continue
-        buf += chunk
-        last_activity = time.perf_counter()
-      else:
-        # Flush accumulated buffer if bus has been idle ≥20ms (≥24 bit-times @ 1200 baud)
-        if buf and (time.perf_counter() - last_activity) > 0.020:
-          self._process(buf)
-          buf = b""
-        time.sleep(0.005)
-        continue
-
-    # Flush remainder on exit
-    if buf:
-      self._process(buf)
-
-  def _process(self, raw: bytes):
-    """Strip preambles, emit frame bytes + decoded info string."""
-    # Strip leading 0xFF preamble bytes
-    i = 0
-    while i < len(raw) and raw[i] == 0xFF:
-      i += 1
-    stripped = raw[i:]
-    if not stripped:
-      return
-
-    info_parts = []
-
-    # Delimiter byte
-    delim = stripped[0] if stripped else None
-    if delim is not None:
-      addr_type = "long" if (delim & 0x80) else "short"
-      frame_type_bits = delim & 0x06
-      frame_type = {0x02: "STX(master→slave)", 0x06: "ACK(slave→master)",
-                    0x01: "STX(2nd master)", 0x00: "BACK(burst)"}.get(frame_type_bits, f"delim=0x{delim:02X}")
-      master_bit = "primary" if (delim & 0x01) == 0 else "secondary"
-      info_parts.append(f"addr={addr_type}  type={frame_type}  master={master_bit}")
-
-    # Try to extract command byte and byte count
-    preamble_count = i
-    info_parts.insert(0, f"preambles={preamble_count}")
-
-    if addr_type == "short" and len(stripped) >= 3:
-      addr_byte = stripped[1] & 0x0F
-      cmd_byte  = stripped[2]
-      info_parts.append(f"addr={addr_byte}  cmd={cmd_byte}")
-      if len(stripped) >= 4:
-        byte_count = stripped[3]
-        info_parts.append(f"byte_count={byte_count}")
-    elif addr_type == "long" and len(stripped) >= 7:
-      cmd_byte  = stripped[6]
-      info_parts.append(f"cmd={cmd_byte}")
-      if len(stripped) >= 8:
-        byte_count = stripped[7]
-        info_parts.append(f"byte_count={byte_count}")
-
-    # Checksum check (last byte = XOR of all bytes from delimiter onward)
-    if len(stripped) >= 2:
-      cs_calc = 0
-      for b in stripped[:-1]:
-        cs_calc ^= b
-      cs_ok = cs_calc == stripped[-1]
-      info_parts.append(f"CheckSum={'OK' if cs_ok else 'FAIL'}")
-
-    info = "  |  ".join(info_parts)
-    self.frame_sniffed.emit(raw, info)
-
 
 # --- STYLE ------------------------------------------------------------------
 STYLE = ""
@@ -768,7 +670,6 @@ class HartMasterSim(QMainWindow):
     self._unique_id = None  # 5-byte long address learned from Cmd0
     self._auto_poller = None
     self._scenario_runner = None
-    self._sniffer_worker = None
     self._run_all_queue = []
     self._run_all_total = 0
     self._run_all_ok = 0
@@ -897,20 +798,6 @@ class HartMasterSim(QMainWindow):
     self._lbl_conn_status.setAlignment(Qt.AlignCenter)
     layout.addWidget(self._lbl_conn_status, 5, 0, 1, 3)
 
-    sep = QFrame()
-    sep.setFrameShape(QFrame.HLine)
-    sep.setFrameShadow(QFrame.Sunken)
-    layout.addWidget(sep, 6, 0, 1, 3)
-
-    self._btn_sniff = QPushButton("\u25b6 Start sniffer")
-    self._btn_sniff.setToolTip(
-      "Passively read bus traffic without sending frames.\n"
-      "Requires port to be connected (open) first.\n"
-      "Use a hardware tap if the port is owned by another process.")
-    self._btn_sniff.clicked.connect(self._toggle_sniffer)
-    layout.addWidget(self._btn_sniff, 7, 0, 1, 3)
-
-    self._sniffing = False
 
     return grp
 
@@ -1268,30 +1155,6 @@ class HartMasterSim(QMainWindow):
     self._btn_poll_start.setEnabled(True)
     self._btn_poll_stop.setEnabled(False)
 
-  def _toggle_sniffer(self):
-    if not self._sniffing:
-      if not self._connected or not self._worker._port or not self._worker._port.is_open:
-        self._log_info("Cannot start sniffer - connect to a port first")
-        return
-      self._sniffing = True
-      self._btn_sniff.setText("\u25a0 Stop sniffer")
-      self._sniffer_worker = SnifferWorker(self._worker._port)
-      self._sniffer_worker.frame_sniffed.connect(self._on_sniffed_frame)
-      self._sniffer_worker.start()
-      self._log_info("== SNIFFER ON -- passive RX, waiting for bus traffic... ==",
-                     color="#fbbf24")
-    else:
-      self._sniffing = False
-      self._btn_sniff.setText("\u25b6 Start sniffer")
-      if self._sniffer_worker:
-        self._sniffer_worker.stop()
-        self._sniffer_worker = None
-      self._log_info("== SNIFFER OFF ==", color="#fbbf24")
-
-  def _on_sniffed_frame(self, raw: bytes, info: str):
-    hex_str = " ".join(f"{b:02X}" for b in raw)
-    self._log_info(f"[SNIFF] {info}", color="#fbbf24")
-    self._log_info(f"        {hex_str}", color="#94a3b8")
 
   def _clear_log(self):
     self._log.clear()
@@ -2025,8 +1888,6 @@ class HartMasterSim(QMainWindow):
 
   def closeEvent(self, event):
     self._stop_autopoll()
-    if self._sniffer_worker:
-      self._sniffer_worker.stop()
     self._worker.stop()
     self._worker.disconnect_port()
     event.accept()
