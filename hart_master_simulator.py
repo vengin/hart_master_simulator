@@ -1905,6 +1905,26 @@ class HartMasterSim(QMainWindow):
 
     parsed = parse_response(rx)
 
+    # Append status/latency summary lines matching manual command output
+    if parsed and parsed.get("ok"):
+      cmd_num = parsed.get("cmd", "?")
+      cs_status = "\u2713 CheskSum OK" if parsed.get("cs_ok") else "\u2717 CheskSum FAIL"
+      cs_color = LOG_RX_OK_COLOR if parsed.get("cs_ok") else LOG_RX_ERR_COLOR
+      status_text = parsed["status_text"]
+      if not parsed.get("cs_ok"):
+        status_text += ", CheckSum FAIL"
+      summary_lines = [
+        (f"  \u2514\u2500 CMD={cmd_num}  st1=0x{parsed['st1']:02X}  st2=0x{parsed['st2']:02X}  "
+         f"{cs_status}  latency={latency_ms:.0f}ms", cs_color),
+        (f"     Status: {status_text}",
+         LOG_DECODED_COLOR if parsed.get("cs_ok") else LOG_RX_ERR_COLOR),
+      ]
+      if parsed.get("dev_flags"):
+        summary_lines.append(
+          (f"     Device: {', '.join(parsed['dev_flags'])}", LOG_INFO_COLOR))
+      for text, color in summary_lines:
+        self._append_log(text, color)
+
     if expect_no_resp:
       ok = not rx  # silence = correct behavior
       result_text = "✓ SILENT (expected)" if ok else "✗ GOT RESPONSE (should be silent)"
