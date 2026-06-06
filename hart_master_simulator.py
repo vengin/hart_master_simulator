@@ -1883,6 +1883,15 @@ class HartMasterSim(QMainWindow):
   def _on_scenario_step_done(self, idx: int, label: str,
                               tx: bytes, rx: bytes, latency_ms: float):
     self._scenario_progress.setValue(idx + 1)
+    # Feed latency into Timing/Stats tab (same as _on_response does for manual commands)
+    if rx:
+      parsed_for_timing = parse_response(rx)
+      if parsed_for_timing and parsed_for_timing.get("ok"):
+        key = str(parsed_for_timing.get("cmd", "?"))
+        if key not in self._timing_data:
+          self._timing_data[key] = []
+        self._timing_data[key].append(latency_ms)
+        self._refresh_timing_table()
     sc_name = self._cb_scenario.currentText()
     steps = SCENARIOS.get(sc_name, {}).get("steps", [])
     step_def = steps[idx] if idx < len(steps) else {}
