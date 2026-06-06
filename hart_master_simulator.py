@@ -1165,6 +1165,182 @@ SCENARIOS = {
        "note": "Rapid poll phase."},
     ]
   },
+
+  "10 - Identity Read (Cmd12/13/14)": {
+    "description": (
+      "Reads device identity information in the order PLCs use during commissioning:\n"
+      "• Cmd0  – identify device, learn unique ID\n"
+      "• Cmd12 – read message string (32-char packed ASCII)\n"
+      "• Cmd13 – read tag, descriptor, date\n"
+      "• Cmd14 – read PV transducer info (units, upper/lower limits, min span)\n"
+      "Diagnoses: slave omits optional identity commands, returns wrong packed-ASCII,\n"
+      "           or rejects Cmd14 on non-pressure devices."
+    ),
+    "steps": [
+      {"label": "Cmd0 - identify device", "cmd": 0, "data": b"",
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.5, "delay_post": 0.3,
+       "note": "Baseline identification. Unique ID learned for long-addr steps."},
+      {"label": "Cmd12 - read message", "cmd": 12, "data": b"",
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.3, "delay_post": 0.3,
+       "note": "Read 32-char packed-ASCII message field. Must return 24 bytes payload."},
+      {"label": "Cmd13 - tag/descriptor/date", "cmd": 13, "data": b"",
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.3, "delay_post": 0.3,
+       "note": "Read tag (8 char), descriptor (16 char), date (3 bytes). Must return 21 bytes."},
+      {"label": "Cmd14 - PV transducer info", "cmd": 14, "data": b"",
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.3, "delay_post": 0.3,
+       "note": "PV units, upper/lower sensor limits, min span. Must return ≥14 bytes."},
+      {"label": "Cmd14 - long addr repeat", "cmd": 14, "data": b"",
+       "use_long": True,  "preambles": 5, "master": "primary",
+       "delay_pre": 0.3, "delay_post": 0.3,
+       "note": "Same read via long addr – confirm consistent response."},
+    ]
+  },
+
+  "11 - Write-Protect Probe (Cmd17/18/19)": {
+    "description": (
+      "Attempts configuration writes to verify write-protect behavior:\n"
+      "• Cmd17 – write message (should return 0x07 if write-protected)\n"
+      "• Cmd18 – write tag/descriptor/date\n"
+      "• Cmd19 – write final assembly number\n"
+      "In write-protect mode, slave MUST return response code 0x07.\n"
+      "Diagnoses: slave silently ignores writes, corrupts config,\n"
+      "           or fails to set write-protect bit in status byte."
+    ),
+    "steps": [
+      {"label": "Cmd0 - baseline status", "cmd": 0, "data": b"",
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.5, "delay_post": 0.3,
+       "note": "Read status before write attempts. Note 'Analog output fixed' bit."},
+      {"label": "Cmd17 - write message (24 bytes)", "cmd": 17,
+       "data": bytes([0x20] * 24),  # packed-ASCII spaces
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.3, "delay_post": 0.4,
+       "note": "Write blank message. If write-protected: expect RC=0x07. If not: message overwritten."},
+      {"label": "Cmd18 - write tag/descriptor/date", "cmd": 18,
+       "data": bytes([0x20] * 21),  # spaces tag + descriptor + date
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.3, "delay_post": 0.4,
+       "note": "Write blank tag and descriptor. Expect RC=0x07 if write-protected."},
+      {"label": "Cmd19 - write final assembly number", "cmd": 19,
+       "data": bytes([0x00, 0x00, 0x00]),
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.3, "delay_post": 0.4,
+       "note": "Write assembly number 0. Expect RC=0x07 if write-protected."},
+      {"label": "Cmd0 - verify no config change", "cmd": 0, "data": b"",
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.4, "delay_post": 0.3,
+       "note": "'Configuration changed' bit should NOT be set if write-protect worked."},
+    ]
+  },
+
+  "12 - Configuration Changed Recovery": {
+    "description": (
+      "Simulates the PLC cold-start / config-changed handling sequence:\n"
+      "• Cmd0 – check for 'Cold start' (0x20) and 'Config changed' (0x40) bits\n"
+      "• Cmd48 – read extended status to capture full snapshot\n"
+      "• Cmd0 × 3 – re-poll until status bits clear (PLCs retry up to N times)\n"
+      "Diagnoses: slave never clears Cold start bit, Config changed sticky after Cmd0,\n"
+      "           or 'More status available' bit loops indefinitely."
+    ),
+    "steps": [
+      {"label": "Cmd0 - initial (check cold-start/config bits)", "cmd": 0, "data": b"",
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.5, "delay_post": 0.4,
+       "note": "ST2 byte: 0x20=ColdStart, 0x40=ConfigChanged, 0x10=MoreStatusAvail."},
+      {"label": "Cmd48 - extended status snapshot", "cmd": 48, "data": b"",
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.3, "delay_post": 0.3,
+       "note": "Capture full extended status. Must send after 'More status available' bit set."},
+      {"label": "Cmd0 - retry #1 (expect bits clearing)", "cmd": 0, "data": b"",
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.5, "delay_post": 0.4,
+       "note": "Cold-start and config-changed bits should clear after first valid Cmd0 exchange."},
+      {"label": "Cmd0 - retry #2", "cmd": 0, "data": b"",
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.5, "delay_post": 0.4,
+       "note": "Second retry - bits must be clear by now on a conformant device."},
+      {"label": "Cmd1 - PV after recovery", "cmd": 1, "data": b"",
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.3, "delay_post": 0.3,
+       "note": "Confirm normal operation restored after status-bit recovery sequence."},
+      {"label": "Cmd3 - all vars after recovery", "cmd": 3, "data": b"",
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.3, "delay_post": 0.3,
+       "note": "Confirm all dynamic variables readable post-recovery."},
+    ]
+  },
+
+  "13 - Device Variable Commands (Cmd9/33)": {
+    "description": (
+      "HART 7 device variable commands:\n"
+      "• Cmd9  – read device variables with status (up to 4 variable codes)\n"
+      "• Cmd33 – read device variables (HART 5/6 compatible subset)\n"
+      "• Cmd3  – fallback all-vars read for comparison\n"
+      "Diagnoses: HART 7 slave does not implement Cmd9 (returns RC=64),\n"
+      "           variable status byte always 0x00 (no status support),\n"
+      "           or returns wrong variable count."
+    ),
+    "steps": [
+      {"label": "Cmd0 - check HART revision", "cmd": 0, "data": b"",
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.5, "delay_post": 0.3,
+       "note": "Byte[3] of payload: 7 = HART7 required for Cmd9. 5/6 = expect RC=64 on Cmd9."},
+      # Cmd9: request 4 device variable codes (0=PV,1=SV,2=TV,3=QV)
+      {"label": "Cmd9 - device vars with status (PV/SV/TV/QV)", "cmd": 9,
+       "data": bytes([0x00, 0x01, 0x02, 0x03]),
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.4, "delay_post": 0.3,
+       "note": "HART7 Cmd9: request variable codes 0,1,2,3. Each var returns 8 bytes + status."},
+      {"label": "Cmd9 - just PV (code 0)", "cmd": 9,
+       "data": bytes([0x00, 0xFF, 0xFF, 0xFF]),
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.4, "delay_post": 0.3,
+       "note": "Cmd9 with only PV requested (0xFF = not used). Minimal variable read."},
+      {"label": "Cmd33 - read device variables", "cmd": 33,
+       "data": bytes([0x00]),  # slot 0
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.4, "delay_post": 0.3,
+       "note": "Cmd33: HART 5/6/7 compatible device variable read."},
+      {"label": "Cmd3 - all dynamic vars (baseline)", "cmd": 3, "data": b"",
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.3, "delay_post": 0.3,
+       "note": "Cmd3 as baseline - compare values against Cmd9/33 results."},
+    ]
+  },
+
+  "14 - Broadcast / Global Address (addr 63)": {
+    "description": (
+      "Tests slave behavior on broadcast address (short addr 63, 0x3F):\n"
+      "• HART spec: address 63 is global broadcast - slaves must NOT respond\n"
+      "• Slave responding to addr 63 causes bus collisions in multi-drop\n"
+      "• Followed by valid addressed Cmd0 to confirm slave is still alive\n"
+      "Diagnoses: slave incorrectly responds to broadcast,\n"
+      "           slave locks up after seeing broadcast address."
+    ),
+    "steps": [
+      {"label": "Cmd0 - normal addr (baseline)", "cmd": 0, "data": b"",
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.5, "delay_post": 0.4,
+       "note": "Baseline: normal addressed Cmd0. Slave must respond."},
+      {"label": "Cmd0 - broadcast addr 63 (expect NO response)", "cmd": 0, "data": b"",
+       "use_long": False, "preambles": 5, "master": "primary",
+       "_addr": 63,
+       "delay_pre": 0.5, "delay_post": 0.6,
+       "note": "Broadcast addr 0x3F. Conformant slave MUST NOT respond. Timeout = pass."},
+      {"label": "Cmd0 - normal addr (recovery check)", "cmd": 0, "data": b"",
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.5, "delay_post": 0.4,
+       "note": "Slave must still respond normally after seeing broadcast."},
+      {"label": "Cmd1 - PV after broadcast", "cmd": 1, "data": b"",
+       "use_long": False, "preambles": 5, "master": "primary",
+       "delay_pre": 0.3, "delay_post": 0.3,
+       "note": "Confirm normal data flow after broadcast test."},
+    ]
+  },
 }
 
 
@@ -1286,6 +1462,10 @@ class HartMasterSim(QMainWindow):
     self._auto_poller = None
     self._scenario_runner = None
     self._sniffer_worker = None
+    self._run_all_queue = []
+    self._run_all_total = 0
+    self._run_all_ok = 0
+    self._run_all_fail = 0
     self._log_lines = 0
     self._max_log_lines = 2000
     self._session_log = []
@@ -1533,7 +1713,7 @@ class HartMasterSim(QMainWindow):
     tb.addWidget(self._chk_show_preamble)
 
     self._chk_timestamps = QCheckBox("Timestamps")
-    self._chk_timestamps.setChecked(True)
+    self._chk_timestamps.setChecked(False)
     tb.addWidget(self._chk_timestamps)
 
     self._chk_annotate = QCheckBox("Annotate bytes")
@@ -2155,6 +2335,11 @@ class HartMasterSim(QMainWindow):
     self._btn_scenario_run.clicked.connect(self._run_scenario)
     btn_row.addWidget(self._btn_scenario_run)
 
+    self._btn_scenario_run_all = QPushButton("▶▶  RUN ALL")
+    self._btn_scenario_run_all.setObjectName("btn_send")
+    self._btn_scenario_run_all.clicked.connect(self._run_all_scenarios)
+    btn_row.addWidget(self._btn_scenario_run_all)
+
     self._btn_scenario_abort = QPushButton("■  ABORT")
     self._btn_scenario_abort.setObjectName("btn_disconnect")
     self._btn_scenario_abort.setEnabled(False)
@@ -2162,6 +2347,19 @@ class HartMasterSim(QMainWindow):
     btn_row.addWidget(self._btn_scenario_abort)
 
     layout.addLayout(btn_row)
+
+    # Random order option + run-all progress label
+    rand_row = QHBoxLayout()
+    self._chk_random_order = QCheckBox("Random order (seed from time)")
+    self._chk_random_order.setToolTip(
+      "Shuffle scenario order using a time-based seed.\n"
+      "Each Run All session uses a different shuffle.")
+    rand_row.addWidget(self._chk_random_order)
+    rand_row.addStretch()
+    self._lbl_run_all_progress = QLabel("")
+    self._lbl_run_all_progress.setObjectName("val")
+    rand_row.addWidget(self._lbl_run_all_progress)
+    layout.addLayout(rand_row)
 
     # Diagnostic hints box
     self._scenario_hints = QTextEdit()
@@ -2237,18 +2435,114 @@ class HartMasterSim(QMainWindow):
     self._scenario_progress.setMaximum(len(steps))
     self._scenario_progress.setValue(0)
     self._btn_scenario_run.setEnabled(False)
+    self._btn_scenario_run_all.setEnabled(False)
     self._btn_scenario_abort.setEnabled(True)
     self._lbl_scenario_summary.setText(f"Running: {name}")
 
     self._log_info(f"═══ SCENARIO START: {name} ═══")
     self._scenario_runner.start()
 
+  def _run_all_scenarios(self):
+    if not self._connected:
+      self._log_info("Not connected - cannot run scenarios")
+      return
+    if not self._worker._port or not self._worker._port.is_open:
+      self._log_info("Port not open")
+      return
+
+    import random
+    names = list(SCENARIOS.keys())
+    if self._chk_random_order.isChecked():
+      seed = int(time.time() * 1000) & 0xFFFFFFFF
+      rng = random.Random(seed)
+      rng.shuffle(names)
+      self._log_info(f"═══ RUN ALL: random order (seed={seed}) ═══")
+      self._log_info("Order: " + " → ".join(f"#{list(SCENARIOS.keys()).index(n)+1}" for n in names))
+    else:
+      self._log_info("═══ RUN ALL: sequential order ═══")
+
+    self._run_all_queue = names
+    self._run_all_total = len(names)
+    self._run_all_ok = 0
+    self._run_all_fail = 0
+    self._btn_scenario_run.setEnabled(False)
+    self._btn_scenario_run_all.setEnabled(False)
+    self._btn_scenario_abort.setEnabled(True)
+    self._advance_run_all()
+
+  def _advance_run_all(self):
+    if not self._run_all_queue:
+      done = self._run_all_total
+      summary = (f"Run All done: {self._run_all_ok}/{done} scenarios fully OK, "
+                 f"{self._run_all_fail} had failures")
+      self._log_info(f"═══ {summary} ═══")
+      self._lbl_run_all_progress.setText("")
+      self._btn_scenario_run.setEnabled(True)
+      self._btn_scenario_run_all.setEnabled(True)
+      self._btn_scenario_abort.setEnabled(False)
+      return
+
+    name = self._run_all_queue.pop(0)
+    remaining = len(self._run_all_queue)
+    current = self._run_all_total - remaining
+    self._lbl_run_all_progress.setText(f"Scenario {current}/{self._run_all_total}")
+
+    # Select scenario in combo for visual feedback
+    idx = self._cb_scenario.findText(name)
+    if idx >= 0:
+      self._cb_scenario.setCurrentIndex(idx)
+
+    sc = SCENARIOS.get(name, {})
+    steps = sc.get("steps", [])
+    if not steps:
+      self._advance_run_all()
+      return
+
+    self._on_scenario_changed(self._cb_scenario.currentIndex())
+    self._scenario_hints.clear()
+
+    base_addr = self._spin_addr.value()
+    self._scenario_runner = ScenarioRunner(
+      port=self._worker._port,
+      steps=list(steps),
+      unique_id=self._unique_id,
+      poll_addr=base_addr,
+    )
+    self._scenario_runner.step_started.connect(self._on_scenario_step_start)
+    self._scenario_runner.step_done.connect(self._on_scenario_step_done)
+    self._scenario_runner.step_error.connect(self._on_scenario_step_error)
+    self._scenario_runner.scenario_done.connect(self._on_run_all_step_done)
+
+    self._scenario_progress.setMaximum(len(steps))
+    self._scenario_progress.setValue(0)
+    # Lock buttons during run-all execution
+    self._btn_scenario_run.setEnabled(False)
+    self._btn_scenario_run_all.setEnabled(False)
+    self._btn_scenario_abort.setEnabled(True)
+    self._lbl_scenario_summary.setText(f"Running: {name}")
+    self._log_info(f"═══ SCENARIO START [{current}/{self._run_all_total}]: {name} ═══")
+    self._scenario_runner.start()
+
+  def _on_run_all_step_done(self, ok_count: int, fail_count: int):
+    """Called after each scenario completes during Run All."""
+    if fail_count == 0:
+      self._run_all_ok += 1
+    else:
+      self._run_all_fail += 1
+    self._on_scenario_done(ok_count, fail_count)
+    # Continue only if queue is still active (not aborted)
+    if self._run_all_queue is not None:
+      QTimer.singleShot(800, self._advance_run_all)
+
   def _abort_scenario(self):
     if self._scenario_runner:
       self._scenario_runner.abort()
     self._btn_scenario_run.setEnabled(True)
+    self._btn_scenario_run_all.setEnabled(True)
     self._btn_scenario_abort.setEnabled(False)
     self._lbl_scenario_summary.setText("Aborted")
+    self._lbl_run_all_progress.setText("")
+    self._run_all_queue = None
     self._log_info("═══ SCENARIO ABORTED ═══")
 
   def _on_scenario_step_start(self, idx: int, label: str, note: str):
@@ -2322,6 +2616,7 @@ class HartMasterSim(QMainWindow):
 
   def _on_scenario_done(self, ok_count: int, fail_count: int):
     self._btn_scenario_run.setEnabled(True)
+    self._btn_scenario_run_all.setEnabled(True)
     self._btn_scenario_abort.setEnabled(False)
     total = ok_count + fail_count
     summary = f"Done: {ok_count}/{total} OK  {fail_count} failed"
