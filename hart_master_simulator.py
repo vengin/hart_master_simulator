@@ -432,28 +432,39 @@ class HartWorker(QThread):
                                     self._preambles, self._master_type)
 
         self._port.reset_input_buffer()
-        t_send = time.perf_counter()
         self._port.write(frame)
         self._port.flush()
         self.frame_logged.emit("TX", label, frame, 0.0)
 
-        # Read response
-        time.sleep(0.3)
+        # Wait for last TX byte to leave the wire, then start latency clock.
+        # 10 bits per byte (8O1) at 1200 baud.
+        tx_duration_s = len(frame) * 10.0 / HART_BAUD
+        time.sleep(tx_duration_s)
+        t_tx_end = time.perf_counter()
+
+        # Read response - stamp first-byte arrival for latency
         raw = b""
-        deadline = time.perf_counter() + self._timeout
+        t_first_byte = None
+        deadline = t_tx_end + self._timeout
         while time.perf_counter() < deadline:
           waiting = self._port.in_waiting
           if waiting:
-            raw += self._port.read(waiting)
-            time.sleep(0.05)
+            chunk = self._port.read(waiting)
+            if t_first_byte is None:
+              t_first_byte = time.perf_counter()
+            raw += chunk
+            time.sleep(0.02)
           elif raw:
-            time.sleep(0.15)
+            time.sleep(0.05)
             if not self._port.in_waiting:
               break
           else:
-            time.sleep(0.05)
+            time.sleep(0.02)
 
-        latency_ms = (time.perf_counter() - t_send) * 1000.0
+        if t_first_byte is not None:
+          latency_ms = (t_first_byte - t_tx_end) * 1000.0
+        else:
+          latency_ms = (time.perf_counter() - t_tx_end) * 1000.0  # timeout, no response
         self.frame_logged.emit("RX", label, raw, latency_ms)
 
         parsed = parse_response(raw)
@@ -672,27 +683,38 @@ class ScenarioRunner(QThread):
           frame = frame[:-1] + bytes([frame[-1] ^ 0xFF])
 
         self._port.reset_input_buffer()
-        t0 = time.perf_counter()
         self._port.write(frame)
         self._port.flush()
 
-        # Collect response
-        time.sleep(0.3)
+        # Wait for last TX byte to leave the wire, then start latency clock.
+        # 10 bits per byte (8O1) at 1200 baud.
+        tx_duration_s = len(frame) * 10.0 / HART_BAUD
+        time.sleep(tx_duration_s)
+        t_tx_end = time.perf_counter()
+
+        # Collect response - stamp first-byte arrival for latency
         raw = b""
-        deadline = time.perf_counter() + 2.0
+        t_first_byte = None
+        deadline = t_tx_end + 2.0
         while time.perf_counter() < deadline:
           waiting = self._port.in_waiting
           if waiting:
-            raw += self._port.read(waiting)
-            time.sleep(0.05)
+            chunk = self._port.read(waiting)
+            if t_first_byte is None:
+              t_first_byte = time.perf_counter()
+            raw += chunk
+            time.sleep(0.02)
           elif raw:
-            time.sleep(0.15)
+            time.sleep(0.05)
             if not self._port.in_waiting:
               break
           else:
-            time.sleep(0.05)
+            time.sleep(0.02)
 
-        latency_ms = (time.perf_counter() - t0) * 1000.0
+        if t_first_byte is not None:
+          latency_ms = (t_first_byte - t_tx_end) * 1000.0
+        else:
+          latency_ms = (time.perf_counter() - t_tx_end) * 1000.0  # timeout, no response
         self.step_done.emit(idx, label, frame, raw, latency_ms)
 
         parsed = parse_response(raw)
@@ -928,11 +950,11 @@ class HartMasterSim(QMainWindow):
     layout.setSpacing(3)
 
     commands = [
-      (0,  "Cmd 0  - Read Unique Identifier"),
-      (1,  "Cmd 1  - Read Primary Variable"),
-      (2,  "Cmd 2  - Read Loop Current + %"),
-      (3,  "Cmd 3  - Read Dynamic Variables"),
-      (6,  "Cmd 6  - Write Polling Address"),
+      (0,  "Cmd 0 - Read Unique Identifier"),
+      (1,  "Cmd 1 - Read Primary Variable"),
+      (2,  "Cmd 2 - Read Loop Current + %"),
+      (3,  "Cmd 3 - Read Dynamic Variables"),
+      (6,  "Cmd 6 - Write Polling Address"),
       (11, "Cmd 11 - Read Unique ID by Tag"),
       (12, "Cmd 12 - Read Message"),
       (13, "Cmd 13 - Read Tag/Descriptor/Date"),
@@ -1755,7 +1777,7 @@ class HartMasterSim(QMainWindow):
       seed = int(time.time() * 1000) & 0xFFFFFFFF
       rng = random.Random(seed)
       rng.shuffle(names)
-      self._log_info(f"\n\n═══ RUN ALL: random order (seed={seed}) ═══")
+      self._log_info(f"\n\n═══ RUN ALL: random order ═══")
       self._log_info("Order: " + " → ".join(f"#{list(SCENARIOS.keys()).index(n)+1}" for n in names))
     else:
       self._log_info("\n\n═══ RUN ALL: sequential order ═══")
