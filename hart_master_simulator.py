@@ -616,7 +616,6 @@ LOG_MUTED = "#94a3b8"
 
 # --- SCENARIO ENGINE --------------------------------------------------------
 
-
 class ScenarioRunner(QThread):
   """Executes a scenario step list sequentially on the serial port."""
   step_started  = pyqtSignal(int, str, str)       # step_idx, label, note
@@ -697,12 +696,18 @@ class ScenarioRunner(QThread):
         self.step_done.emit(idx, label, frame, raw, latency_ms)
 
         parsed = parse_response(raw)
+        step_addr = step.get("_addr", self._poll_addr)
+        addr_mismatch = step_addr != self._poll_addr
+
         if expect_no_resp:
           # Silence = pass; any response = fail (bus collision / non-conformant slave)
           if not raw:
             ok_count += 1
           else:
             fail_count += 1
+        elif addr_mismatch and not raw:
+          # Multi-drop sweep: no response at a non-configured address = correct
+          ok_count += 1
         elif parsed and parsed.get("ok"):
           ok_count += 1
           # Update unique ID if we learned it
@@ -998,7 +1003,7 @@ class HartMasterSim(QMainWindow):
     tb.addWidget(self._chk_show_preamble)
 
     self._chk_timestamps = QCheckBox("Timestamps")
-    self._chk_timestamps.setChecked(True)
+    self._chk_timestamps.setChecked(False)
     tb.addWidget(self._chk_timestamps)
 
     self._chk_annotate = QCheckBox("Annotate bytes")
@@ -1862,9 +1867,15 @@ class HartMasterSim(QMainWindow):
       result_text = "✓ SILENT (expected)" if ok else "✗ GOT RESPONSE (should be silent)"
       result_color = "#4ade80" if ok else "#f87171"
       if not ok:
-        self._scenario_hints.append(
-          f"  ⚠ Step {idx+1}: Slave responded to broadcast/silence-expected frame.\n"
-          f"    This causes bus collisions in multi-drop. Check address filtering.\n")
+        is_corrupt = steps[idx].get("_corrupt_cs", False) if idx < len(steps) else False
+        if is_corrupt:
+          self._scenario_hints.append(
+            f"  ⚠ Step {idx+1}: Slave responded to a frame with a bad checksum.\n"
+            f"    Conformant slave must silently discard corrupted frames.\n")
+        else:
+          self._scenario_hints.append(
+            f"  ⚠ Step {idx+1}: Slave responded to broadcast/silence-expected frame.\n"
+            f"    This causes bus collisions in multi-drop. Check address filtering.\n")
     else:
       ok = parsed is not None and parsed.get("ok", False)
 
@@ -1879,8 +1890,18 @@ class HartMasterSim(QMainWindow):
           self._lbl_unique_learned.setText(f"✓ Learned: {uid_str}")
           self._lbl_unique_learned.setStyleSheet("color: #4caf50;")
 
-      result_text = "✓ OK" if ok else ("✗ NO RESPONSE" if not rx else "✗ PARSE ERR")
-      result_color = "#4ade80" if ok else "#f87171"
+      # Multi-drop: silence on a non-matching address is correct, not an error
+      sc_name = self._cb_scenario.currentText()
+      step_def = SCENARIOS.get(sc_name, {}).get("steps", [])
+      step_addr = step_def[idx].get("_addr", None) if idx < len(step_def) else None
+      addr_mismatch = (step_addr is not None and step_addr != self._spin_addr.value())
+      if addr_mismatch and not rx:
+        ok = True
+        result_text = "✓ SILENT (no device at this addr)"
+        result_color = "#4ade80"
+      else:
+        result_text = "✓ OK" if ok else ("✗ NO RESPONSE" if not rx else "✗ PARSE ERR")
+        result_color = "#4ade80" if ok else "#f87171"
 
       if not ok:
         hint = ""
