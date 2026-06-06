@@ -1468,8 +1468,13 @@ class HartMasterSim(QMainWindow):
 
 
   def _log_info(self, msg: str, color: str = LOG_INFO_COLOR):
-    self._append_log(f"  > {msg}", color)
-    self._session_log.append(f"  > {msg}")
+    leading = len(msg) - len(msg.lstrip("\n"))
+    for _ in range(leading):
+      self._append_log("", color)
+      self._session_log.append("")
+    clean = msg.lstrip("\n")
+    self._append_log(f"  > {clean}", color)
+    self._session_log.append(f"  > {clean}")
 
   def _append_log(self, text: str, color: str = "#c8cdd3"):
     cursor = self._log.textCursor()
