@@ -1348,9 +1348,13 @@ class HartMasterSim(QMainWindow):
 
 
   # -- Log helpers --------------------------------------------------------
-  def _log_frame(self, direction: str, label: str, data: bytes, latency_ms: float):
+  def _log_frame(self, direction: str, label: str, data: bytes, latency_ms: float,
+                 expected_silence: bool = False):
     if not data:
-      self._append_log(f"  [{direction}] {label} - (no data)", LOG_RX_ERR_COLOR)
+      if expected_silence:
+        self._append_log(f"  [{direction}] {label} - (no response, expected)", LOG_RX_OK_COLOR)
+      else:
+        self._append_log(f"  [{direction}] {label} - (no data)", LOG_RX_ERR_COLOR)
       return
 
     color = LOG_TX_COLOR if direction == "TX" else LOG_RX_OK_COLOR
@@ -1852,13 +1856,16 @@ class HartMasterSim(QMainWindow):
   def _on_scenario_step_done(self, idx: int, label: str,
                               tx: bytes, rx: bytes, latency_ms: float):
     self._scenario_progress.setValue(idx + 1)
-    self._log_frame("TX", label, tx, 0.0)
-    self._log_frame("RX", label, rx, latency_ms)
-
-    # Look up expect_no_response flag from current scenario's step list
     sc_name = self._cb_scenario.currentText()
     steps = SCENARIOS.get(sc_name, {}).get("steps", [])
-    expect_no_resp = steps[idx].get("expect_no_response", False) if idx < len(steps) else False
+    step_def = steps[idx] if idx < len(steps) else {}
+    expect_no_resp = step_def.get("expect_no_response", False)
+    step_addr = step_def.get("_addr", None)
+    addr_mismatch = step_addr is not None and step_addr != self._spin_addr.value()
+    expected_silence = expect_no_resp or (addr_mismatch and not rx)
+
+    self._log_frame("TX", label, tx, 0.0)
+    self._log_frame("RX", label, rx, latency_ms, expected_silence=expected_silence)
 
     parsed = parse_response(rx)
 
