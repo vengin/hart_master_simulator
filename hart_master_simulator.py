@@ -882,7 +882,7 @@ LOG_MUTED = "#94a3b8"
 #   note       str   – diagnostic hint shown in log before step
 
 SCENARIOS = {
-  "1 — Cold-Start Enumeration (Rockwell style)": {
+  "1 - Cold-Start Enumeration (Rockwell style)": {
     "description": (
       "Mimics Rockwell 5094-IF4IHSXT startup sequence:\n"
       "• 20 preambles (Rockwell default)\n"
@@ -916,11 +916,11 @@ SCENARIOS = {
       {"label": "Cmd48 Ext Status (long addr)", "cmd": 48, "data": b"",
        "use_long": True,  "preambles": 20, "master": "primary",
        "delay_pre": 0.3, "delay_post": 0.2,
-       "note": "Extended device status — PLCs poll this on startup."},
+       "note": "Extended device status - PLCs poll this on startup."},
     ]
   },
 
-  "2 — Preamble Count Sweep (3/5/8/16/20)": {
+  "2 - Preamble Count Sweep (3/5/8/16/20)": {
     "description": (
       "Sends Cmd0 with increasing preamble counts.\n"
       "Slave must respond to ≥5 preambles (HART spec minimum).\n"
@@ -929,30 +929,30 @@ SCENARIOS = {
       "Diagnoses: slave preamble detector threshold."
     ),
     "steps": [
-      {"label": "Cmd0 — 3 preambles", "cmd": 0, "data": b"",
+      {"label": "Cmd0 - 3 preambles", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 3, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
-       "note": "3 preambles — BELOW spec minimum. Slave may legitimately ignore."},
-      {"label": "Cmd0 — 5 preambles", "cmd": 0, "data": b"",
+       "note": "3 preambles - BELOW spec minimum. Slave may legitimately ignore."},
+      {"label": "Cmd0 - 5 preambles", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 5, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
-       "note": "5 preambles — HART spec minimum. Slave MUST respond."},
-      {"label": "Cmd0 — 8 preambles", "cmd": 0, "data": b"",
+       "note": "5 preambles - HART spec minimum. Slave MUST respond."},
+      {"label": "Cmd0 - 8 preambles", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 8, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
-       "note": "8 preambles — common default."},
-      {"label": "Cmd0 — 16 preambles", "cmd": 0, "data": b"",
+       "note": "8 preambles - common default."},
+      {"label": "Cmd0 - 16 preambles", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 16, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
-       "note": "16 preambles — conservative industrial default."},
-      {"label": "Cmd0 — 20 preambles", "cmd": 0, "data": b"",
+       "note": "16 preambles - conservative industrial default."},
+      {"label": "Cmd0 - 20 preambles", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 20, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
-       "note": "20 preambles — Rockwell 5094 default. Slave must handle."},
+       "note": "20 preambles - Rockwell 5094 default. Slave must handle."},
     ]
   },
 
-  "3 — Secondary Master Probe (Emerson Trex)": {
+  "3 - Secondary Master Probe (Emerson Trex)": {
     "description": (
       "Emerson Trex communicates as secondary master (delimiter 0x01/0x81).\n"
       "Sends Cmd0 first as primary then as secondary.\n"
@@ -961,35 +961,35 @@ SCENARIOS = {
       "           or hardcodes primary-only check."
     ),
     "steps": [
-      {"label": "Cmd0 — primary master", "cmd": 0, "data": b"",
+      {"label": "Cmd0 - primary master", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 5, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
        "note": "Baseline: primary master delimiter 0x02."},
-      {"label": "Cmd0 — secondary master", "cmd": 0, "data": b"",
+      {"label": "Cmd0 - secondary master", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 5, "master": "secondary",
        "delay_pre": 0.5, "delay_post": 0.5,
        "note": "Secondary master delimiter 0x01. Slave must also respond."},
-      {"label": "Cmd1 PV — secondary master", "cmd": 1, "data": b"",
+      {"label": "Cmd1 PV - secondary master", "cmd": 1, "data": b"",
        "use_long": False, "preambles": 5, "master": "secondary",
        "delay_pre": 0.3, "delay_post": 0.3,
        "note": "Normal read via secondary master."},
-      {"label": "Cmd3 Dynamic — secondary master", "cmd": 3, "data": b"",
+      {"label": "Cmd3 Dynamic - secondary master", "cmd": 3, "data": b"",
        "use_long": False, "preambles": 5, "master": "secondary",
        "delay_pre": 0.3, "delay_post": 0.3,
        "note": "All vars via secondary master."},
     ]
   },
 
-  "4 — Multi-Drop Address Sweep (addr 0–15)": {
+  "4 - Multi-Drop Address Sweep (addr 0–15)": {
     "description": (
       "Polls Cmd0 at every short address 0–15.\n"
-      "Standard multi-drop enumeration — PLCs do this on bus startup.\n"
+      "Standard multi-drop enumeration - PLCs do this on bus startup.\n"
       "Diagnoses: slave responds on wrong address,\n"
       "           does not respond on its configured address,\n"
       "           or responds to broadcast address 0 only."
     ),
     "steps": [
-      {"label": f"Cmd0 — addr {addr}", "cmd": 0, "data": b"",
+      {"label": f"Cmd0 - addr {addr}", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 5, "master": "primary",
        "_addr": addr,
        "delay_pre": 0.2, "delay_post": 0.4,
@@ -998,7 +998,7 @@ SCENARIOS = {
     ]
   },
 
-  "5 — Short/Long Address Interleave": {
+  "5 - Short/Long Address Interleave": {
     "description": (
       "Alternates between short-addr and long-addr frames.\n"
       "Some slaves mis-handle address mode switches mid-session.\n"
@@ -1033,7 +1033,7 @@ SCENARIOS = {
     ]
   },
 
-  "6 — Rapid-Fire Stress (gap/timing)": {
+  "6 - Rapid-Fire Stress (gap/timing)": {
     "description": (
       "Sends Cmd1 repeatedly with short inter-frame gaps.\n"
       "Tests slave's ability to handle back-to-back requests.\n"
@@ -1050,39 +1050,39 @@ SCENARIOS = {
     ]
   },
 
-  "7 — Bad Checksum Injection × 3 then Valid": {
+  "7 - Bad Checksum Injection × 3 then Valid": {
     "description": (
       "Sends 3 frames with corrupted checksums, then a valid Cmd0.\n"
       "Slave must:\n"
-      "  • Silently discard or NAK bad-CS frames\n"
+      "  • Silently discard or NAK bad-CheckSum frames\n"
       "  • Recover and respond to the valid frame\n"
       "Diagnoses: slave locks up after bad frame, never recovers,\n"
-      "           or responds to bad-CS frame (wrong behavior)."
+      "           or responds to bad-CheckSum frame (wrong behavior)."
     ),
     "steps": [
-      {"label": "BAD CS frame #1", "cmd": 0, "data": b"",
+      {"label": "BAD CheckSum frame #1", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 5, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
-       "note": "Checksum XOR'd with 0xFF — slave must discard.",
+       "note": "Checksum XOR'd with 0xFF - slave must discard.",
        "_corrupt_cs": True},
-      {"label": "BAD CS frame #2", "cmd": 0, "data": b"",
+      {"label": "BAD CheckSum frame #2", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 5, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
        "note": "Second bad-CS frame.",
        "_corrupt_cs": True},
-      {"label": "BAD CS frame #3", "cmd": 0, "data": b"",
+      {"label": "BAD CheckSum frame #3", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 5, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
        "note": "Third bad-CS frame.",
        "_corrupt_cs": True},
-      {"label": "VALID Cmd0 — recovery check", "cmd": 0, "data": b"",
+      {"label": "VALID Cmd0 - recovery check", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 5, "master": "primary",
        "delay_pre": 0.8, "delay_post": 0.5,
-       "note": "Valid frame after 3 bad ones. Slave MUST respond — tests recovery."},
+       "note": "Valid frame after 3 bad ones. Slave MUST respond - tests recovery."},
     ]
   },
 
-  "8 — HART Revision Probe (Cmd0 → check revision byte)": {
+  "8 - HART Revision Probe (Cmd0 → check revision byte)": {
     "description": (
       "Sends Cmd0 and inspects HART revision field.\n"
       "HART 5 = 0x05, HART 6 = 0x06, HART 7 = 0x07.\n"
@@ -1092,22 +1092,22 @@ SCENARIOS = {
       "           causing master to abort session."
     ),
     "steps": [
-      {"label": "Cmd0 — check HART revision", "cmd": 0, "data": b"",
+      {"label": "Cmd0 - check HART revision", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 5, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
        "note": "Check byte[3] of response payload: 5=HARTv5, 6=HARTv6, 7=HARTv7."},
-      {"label": "Cmd0 long — cross-check", "cmd": 0, "data": b"",
+      {"label": "Cmd0 long - cross-check", "cmd": 0, "data": b"",
        "use_long": True,  "preambles": 5, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
-       "note": "Long addr repeat — confirm same revision reported."},
-      {"label": "Cmd48 — extended status", "cmd": 48, "data": b"",
+       "note": "Long addr repeat - confirm same revision reported."},
+      {"label": "Cmd48 - extended status", "cmd": 48, "data": b"",
        "use_long": False, "preambles": 5, "master": "primary",
        "delay_pre": 0.4, "delay_post": 0.4,
        "note": "HART 7 devices must implement Cmd48. HART 5 may return cmd-not-implemented (64)."},
     ]
   },
 
-  "9 — Full PLC Session (Rockwell + Emerson combined)": {
+  "9 - Full PLC Session (Rockwell + Emerson combined)": {
     "description": (
       "Full realistic session combining both device patterns:\n"
       "Phase 1 (Rockwell): 20 preambles, primary master, long addr\n"
@@ -1458,18 +1458,18 @@ class HartMasterSim(QMainWindow):
     layout.setSpacing(3)
 
     commands = [
-      (0,  "Cmd 0  — Read Unique Identifier"),
-      (1,  "Cmd 1  — Read Primary Variable"),
-      (2,  "Cmd 2  — Read Loop Current + %"),
-      (3,  "Cmd 3  — Read Dynamic Variables"),
-      (6,  "Cmd 6  — Write Polling Address"),
-      (11, "Cmd 11 — Read Unique ID by Tag"),
-      (12, "Cmd 12 — Read Message"),
-      (13, "Cmd 13 — Read Tag/Descriptor/Date"),
-      (14, "Cmd 14 — Read PV Info"),
-      (15, "Cmd 15 — Read Output Info"),
-      (16, "Cmd 16 — Read Final Assembly"),
-      (48, "Cmd 48 — Read Additional Status"),
+      (0,  "Cmd 0  - Read Unique Identifier"),
+      (1,  "Cmd 1  - Read Primary Variable"),
+      (2,  "Cmd 2  - Read Loop Current + %"),
+      (3,  "Cmd 3  - Read Dynamic Variables"),
+      (6,  "Cmd 6  - Write Polling Address"),
+      (11, "Cmd 11 - Read Unique ID by Tag"),
+      (12, "Cmd 12 - Read Message"),
+      (13, "Cmd 13 - Read Tag/Descriptor/Date"),
+      (14, "Cmd 14 - Read PV Info"),
+      (15, "Cmd 15 - Read Output Info"),
+      (16, "Cmd 16 - Read Final Assembly"),
+      (48, "Cmd 48 - Read Additional Status"),
     ]
 
     for cmd_num, label in commands:
@@ -1487,7 +1487,7 @@ class HartMasterSim(QMainWindow):
 
     layout.addWidget(QLabel("Command"), 0, 0)
     self._cb_poll_cmd = QComboBox()
-    self._cb_poll_cmd.addItems(["0 — Identify", "1 — PV", "2 — Current+%", "3 — All vars"])
+    self._cb_poll_cmd.addItems(["0 - Identify", "1 - PV", "2 - Current+%", "3 - All vars"])
     layout.addWidget(self._cb_poll_cmd, 0, 1)
 
     layout.addWidget(QLabel("Interval (s)"), 1, 0)
@@ -1696,7 +1696,7 @@ class HartMasterSim(QMainWindow):
 
   def _send_command(self, cmd: int, data: bytes = b"", label: str = ""):
     if not self._connected:
-      self._log_info("Not connected — cannot send")
+      self._log_info("Not connected - cannot send")
       return
     use_long = self._cb_addr_mode.currentIndex() == 1
     unique_id = self._get_unique_id() if use_long else None
@@ -1723,7 +1723,7 @@ class HartMasterSim(QMainWindow):
     try:
       data = bytes.fromhex(data_text.replace(" ", "")) if data_text else b""
     except ValueError:
-      self._log_info("Invalid hex data — check your input")
+      self._log_info("Invalid hex data - check your input")
       return
     self._send_command(cmd, data, f"CUSTOM CMD {cmd}")
 
@@ -1735,7 +1735,7 @@ class HartMasterSim(QMainWindow):
     frame = build_short_frame(addr, cmd, b"", self._spin_preambles.value())
     # Corrupt the last byte (checksum)
     frame = frame[:-1] + bytes([(frame[-1] ^ 0xFF)])
-    self._log_info("Injecting BAD CHECKSUM frame — testing slave error response")
+    self._log_info("Injecting BAD CHECKSUM frame - testing slave error response")
     self._worker._port.write(frame)
     self._worker._port.flush()
     self._log_frame("TX", "BAD CHECKSUM TEST", frame, 0)
@@ -1779,7 +1779,7 @@ class HartMasterSim(QMainWindow):
   def _toggle_sniffer(self):
     if not self._sniffing:
       if not self._connected or not self._worker._port or not self._worker._port.is_open:
-        self._log_info("Cannot start sniffer — connect to a port first")
+        self._log_info("Cannot start sniffer - connect to a port first")
         return
       self._sniffing = True
       self._btn_sniff.setText("\u25a0 Stop sniffer")
@@ -1827,7 +1827,7 @@ class HartMasterSim(QMainWindow):
 
   def _on_response(self, parsed: dict):
     if "error" in parsed:
-      self._log_info(f"⚠  {parsed.get('_label', '')} — {parsed['error']}", color=LOG_RX_ERR_COLOR)
+      self._log_info(f"⚠  {parsed.get('_label', '')} - {parsed['error']}", color=LOG_RX_ERR_COLOR)
       return
 
     cmd = parsed.get("cmd", "?")
@@ -1880,7 +1880,7 @@ class HartMasterSim(QMainWindow):
   # -- Log helpers --------------------------------------------------------
   def _log_frame(self, direction: str, label: str, data: bytes, latency_ms: float):
     if not data:
-      self._append_log(f"  [{direction}] {label} — (no data)", LOG_RX_ERR_COLOR)
+      self._append_log(f"  [{direction}] {label} - (no data)", LOG_RX_ERR_COLOR)
       return
 
     color = LOG_TX_COLOR if direction == "TX" else LOG_RX_OK_COLOR
@@ -2028,7 +2028,7 @@ class HartMasterSim(QMainWindow):
     rows.append(("Address mode", "Long (unique ID)" if parsed.get("is_long") else "Short (polling)"))
     rows.append(("Burst mode", "Yes" if parsed.get("is_burst") else "No"))
     rows.append(("Byte count", str(parsed.get("byte_count", "?"))))
-    rows.append(("Status byte 1 (comm)", f"0x{parsed['st1']:02X} — {parsed['status_text']}"))
+    rows.append(("Status byte 1 (comm)", f"0x{parsed['st1']:02X} - {parsed['status_text']}"))
     rows.append(("Status byte 2 (device)", f"0x{parsed['st2']:02X}"))
 
     dev_flags = parsed.get("dev_flags", [])
@@ -2194,12 +2194,12 @@ class HartMasterSim(QMainWindow):
       self._scenario_table.setItem(i, 3, QTableWidgetItem("—"))
     self._scenario_progress.setValue(0)
     self._scenario_progress.setMaximum(max(len(steps), 1))
-    self._lbl_scenario_summary.setText(f"{len(steps)} steps — press RUN to start")
+    self._lbl_scenario_summary.setText(f"{len(steps)} steps - press RUN to start")
     self._scenario_hints.clear()
 
   def _run_scenario(self):
     if not self._connected:
-      self._log_info("Not connected — cannot run scenario")
+      self._log_info("Not connected - cannot run scenario")
       return
     if not self._worker._port or not self._worker._port.is_open:
       self._log_info("Port not open")
@@ -2303,9 +2303,9 @@ class HartMasterSim(QMainWindow):
     if not ok:
       hint = ""
       if not rx:
-        hint = "No response — check: baud/parity (1200 8O1), preamble count, address, wiring."
+        hint = "No response - check: baud/parity (1200 8O1), preamble count, address, wiring."
       elif parsed and not parsed.get("cs_ok"):
-        hint = "Response received but checksum failed — possible line noise or half-duplex echo."
+        hint = "Response received but checksum failed - possible line noise or half-duplex echo."
       elif parsed and "error" in parsed:
         hint = f"Parse error: {parsed['error']}"
       if hint:
@@ -2335,10 +2335,10 @@ class HartMasterSim(QMainWindow):
         "\n--- COMMON CAUSES FOR FAILED STEPS ---\n"
         "• Preamble count mismatch (slave needs ≥5, Rockwell sends 20)\n"
         "• HART baud must be exactly 1200, 8O1\n"
-        "• Half-duplex: TX echoed back on RX — use RS-485 modem or HART modem\n"
+        "• Half-duplex: TX echoed back on RX - use RS-485 modem or HART modem\n"
         "• Slave only responds to primary master (0x02), rejects secondary (0x01)\n"
         "• Slave only handles short-addr frames, rejects long-addr\n"
-        "• Cold-start: 'Configuration changed' bit set — send Cmd0 again\n"
+        "• Cold-start: 'Configuration changed' bit set - send Cmd0 again\n"
         "• HART revision mismatch (slave HART5 vs master expects HART7)\n"
       )
 
