@@ -1,0 +1,240 @@
+QMainWindow {
+  background: #000000;
+}
+QWidget {
+  background: #000000;
+  color: #f1f5f9;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+QGroupBox {
+  border: 1px solid #475569;
+  border-radius: 4px;
+  margin-top: 8px;
+  padding-top: 4px;
+  font-size: 12px;
+  color: #ffffff;
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+}
+QGroupBox::title {
+  subcontrol-origin: margin;
+  left: 8px;
+  padding: 0 4px;
+}
+QPushButton {
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 3px;
+  padding: 5px 12px;
+  color: #f1f5f9;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+QPushButton:hover {
+  background: #334155;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+QPushButton:pressed {
+  background: #0f172a;
+}
+QPushButton:disabled {
+  color: #475569;
+  border-color: #1e293b;
+}
+QPushButton#btn_connect {
+  background: #064e3b;
+  border-color: #059669;
+  color: #34d399;
+}
+QPushButton#btn_connect:hover {
+  background: #047857;
+  border-color: #34d399;
+}
+QPushButton#btn_disconnect {
+  background: #7f1d1d;
+  border-color: #dc2626;
+  color: #f87171;
+}
+QPushButton#btn_disconnect:hover {
+  background: #991b1b;
+  border-color: #f87171;
+}
+QPushButton#btn_send {
+  background: #1e3a8a;
+  border-color: #2563eb;
+  color: #60a5fa;
+  font-size: 12px;
+  padding: 6px 16px;
+}
+QPushButton#btn_send:hover {
+  background: #1d4ed8;
+  border-color: #60a5fa;
+  color: #93c5fd;
+}
+QPushButton#btn_poll_start {
+  background: #064e3b;
+  border-color: #059669;
+  color: #34d399;
+}
+QPushButton#btn_poll_stop {
+  background: #7f1d1d;
+  border-color: #dc2626;
+  color: #f87171;
+}
+QComboBox {
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 3px;
+  padding: 4px 8px;
+  color: #f1f5f9;
+}
+QComboBox::drop-down {
+  border: none;
+  width: 20px;
+}
+QComboBox QAbstractItemView {
+  background: #1e293b;
+  border: 1px solid #475569;
+  selection-background-color: #2563eb;
+}
+QSpinBox, QDoubleSpinBox, QLineEdit {
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 3px;
+  padding: 4px 8px;
+  color: #f1f5f9;
+}
+QSpinBox:focus, QLineEdit:focus {
+  border-color: #3b82f6;
+}
+QTextEdit {
+  background: #000000;
+  border: 1px solid #334155;
+  border-radius: 3px;
+  color: #f1f5f9;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+}
+QTabWidget::pane {
+  border: 1px solid #334155;
+  background: #000000;
+}
+QTabBar {
+  /* Fix for QTabBar (Tabs): Force transparent focus indicator */
+  outline: 0;
+}
+QTabBar::tab:focus {
+  /* Instead of a dotted box, indicate focus with a clean colored border */
+  border-top: 3px solid #3b82f6;
+}
+/* Fix for QAbstractItemView (Tables, Lists, Trees) */
+QAbstractItemView {
+  outline: 0;
+}
+
+/* Fix for Buttons and Checkboxes */
+QPushButton, QCheckBox, QRadioButton, QComboBox {
+  /* Override focus visual representation by explicitly defining focus styles */
+  border: 1px solid #475569;
+}
+
+QPushButton:focus, QCheckBox:focus, QComboBox:focus {
+  /* Highlight the active control using a distinct border color instead of a dotted rect */
+  border-color: #3b82f6;
+}
+QTabBar::tab {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-bottom: none;
+  padding: 8px 14px;             /* Reduced horizontal padding to prevent truncation */
+  min-width: 120px;              /* Explicit minimum width to fit text layout */
+  color: #cbd5e1;
+  font-size: 13px;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-weight: bold;
+}
+QTabBar::tab:selected {
+  background: #000000;
+  color: #ffffff;
+  border-top: 3px solid #3b82f6;
+}
+QTabBar::tab:hover {
+  color: #ffffff;
+  background: #273549;
+}
+QLabel {
+  color: #ffffff;
+  font-size: 12px;
+}
+QLabel#val {
+  color: #f1f5f9;
+  font-size: 12px;
+}
+QLabel#bright {
+  color: #3b82f6;
+  font-size: 12px;
+}
+QLabel#ok {
+  color: #34d399;
+}
+QLabel#warn {
+  color: #fbbf24;
+}
+QLabel#err {
+  color: #f87171;
+}
+QCheckBox {
+  color: #f1f5f9;
+}
+QStatusBar {
+  background: #000000;
+  color: #94a3b8;
+  border-top: 1px solid #334155;
+  font-size: 11px;
+}
+QSplitter::handle {
+  background: #334155;
+}
+QScrollBar:vertical {
+  background: #000000;
+  width: 8px;
+  border: none;
+}
+QScrollBar::handle:vertical {
+  background: #475569;
+  border-radius: 4px;
+  min-height: 20px;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+  height: 0;
+}
+QTableWidget {
+  background: #000000;
+  gridline-color: #334155;
+  border: 1px solid #334155;
+  /* Add explicit background for alternating rows to prevent bright white/grey mash */
+  qproperty-alternatingRowColors: true;
+}
+QTableWidget::item {
+  padding: 3px 6px;
+}
+/* Crucial fix for contrast: explicit background for alternating rows */
+QTableWidget::item:alternate {
+  background: #0f172a;
+}
+QHeaderView::section {
+  background: #1e293b;
+  border: 1px solid #334155;
+  padding: 4px 6px;
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: bold;
+}
+/* Fix for Buttons and Checkboxes outline*/
+QPushButton, QCheckBox, QRadioButton, QComboBox {
+  /* Override focus visual representation by explicitly defining focus styles */
+  border: 1px solid #475569;
+  outline: 0;
+}
