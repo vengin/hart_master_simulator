@@ -471,4 +471,29 @@ SCENARIOS = {
        "note": "Confirm normal data flow after broadcast test."},
     ]
   },
+
+  "15 - Power-On Cold Start Validation": {
+    "description": (
+      "Validates if slave handles cold-start flags:\n"
+      "• Sends baseline short-addr Cmd0\n"
+      "• Checks if 'Configuration changed' / 'Cold start' bit is set\n"
+      "• Sends second Cmd0 to see if bits clear properly."
+    ),
+    "steps": [
+      {"label": "Initial Cmd0 Discovery", "cmd": 0, "data": b"", "use_long": False, "preambles": 5, "master": "primary", "delay_pre": 0.5, "delay_post": 0.3, "note": "Check device flags byte (st2) for Cold Start bit."},
+      {"label": "Verify Flag Clearing Cmd0", "cmd": 0, "data": b"", "use_long": False, "preambles": 5, "master": "primary", "delay_pre": 0.2, "delay_post": 0.2, "note": "Flag must clear on second transmission according to spec."}
+    ]
+  },
+
+  "16 - Invalid Command Exception Handling": {
+    "description": (
+      "Injects unimplemented command code to monitor slave's response logic:\n"
+      "• Sends invalid Cmd 99\n"
+      "• Expects response code 64 ('Command not implemented')\n"
+      "• Verifies slave doesn't freeze up under invalid inputs."
+    ),
+    "steps": [
+      {"label": "Send Unimplemented Cmd 99", "cmd": 99, "data": b"0000", "use_long": False, "preambles": 5, "master": "primary", "delay_pre": 0.3, "delay_post": 0.3, "note": "Slave must respond with error code 64, not time out."}
+    ]
+  },
 }
