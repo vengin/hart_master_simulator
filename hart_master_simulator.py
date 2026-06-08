@@ -387,6 +387,18 @@ def decode_cmd14(payload: bytes) -> dict:
     "Minimum span": f"{min_span:.4f}",
   }
 
+def decode_cmd20(payload: bytes) -> dict:
+  if len(payload) != 32:
+    return {"error": f"Invalid payload length for Cmd 20: {len(payload)} bytes (need 32)"}
+
+  try:
+    long_tag = payload.decode('latin-1').strip()
+  except Exception as e:
+    return {"error": f"Decoding failed: {str(e)}"}
+
+  return {
+    "Long Tag": long_tag
+  }
 
 def decode_cmd48(payload: bytes) -> dict:
   if not payload:
@@ -418,6 +430,7 @@ def decode_response(cmd: int, payload: bytes) -> dict | None:
     12: decode_cmd12,
     13: decode_cmd13,
     14: decode_cmd14,
+    20: decode_cmd20,
     48: decode_cmd48,
   }
   fn = decoders.get(cmd)
@@ -900,6 +913,7 @@ class HartMasterSim(QMainWindow):
       (14, "Cmd 14 - Read PV Info"),
       (15, "Cmd 15 - Read Output Info"),
       (16, "Cmd 16 - Read Final Assembly"),
+      (20, "Cmd 20 - Read Long Tag"),
       (48, "Cmd 48 - Read Additional Status"),
     ]
 
