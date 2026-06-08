@@ -223,31 +223,88 @@ def parse_response(raw: bytes) -> dict | None:
 
 # --- COMMAND DECODERS -------------------------------------------------------
 
+# Modified decode_cmd0 in hart_master_simulator.py for HART 7
 def decode_cmd0(payload: bytes) -> dict:
-  if len(payload) < 12:
-    return {"error": f"Too short: {len(payload)} bytes (need 12)"}
-  mfr_id = payload[0]
-  dev_type = payload[1]
-  preambles = payload[2]
-  hart_rev = payload[3]
-  dev_rev = payload[4]
-  sw_rev = payload[5]
-  hw_rev = payload[6]
-  flags = payload[7]
-  dev_id = payload[8:11]
-  num_resp_pre = payload[11] if len(payload) > 11 else None
+  payload_len = len(payload)
+  if payload_len < 11:
+    return {"error": f"Invalid payload length: {payload_len} bytes. Too short."}
+
+  # HART 7 Extended Format Verification
+  if payload[0] == 254:
+    if payload_len < 17:
+      return {"error": f"HART 7 format error: Minimum 17 bytes required, got {payload_len}"}
+
+    hart_rev = payload[4]
+    if hart_rev < 7:
+      return {"error": f"HART 7 format error: Expansion code 254 present but HART Revision is {hart_rev}"}
+
+    mfr_id = payload[1]
+    dev_type = payload[2]
+    dev_rev = payload[5]
+    sw_rev = payload[6]
+    hw_rev = payload[7]
+    flags = payload[8]
+    dev_id = payload[9:12]
+    max_vars = payload[13] if payload_len > 13 else None
+    cfg_count = ((payload[14] << 8) | payload[15]) if payload_len > 15 else None
+    ext_status = payload[16] if payload_len > 16 else None
+    fmt = f"HART 7 (Extended, {payload_len}B)"
+
+  # HART 5/6 Legacy Format Verification
+  else:
+    if payload_len < 12:
+      if payload_len == 11 and payload[3] <= 6:
+        mfr_id = payload[0]
+        dev_type = payload[1]
+        return {
+          "Protocol Format": "Non-standard HART 5 (Truncated)",
+          "Manufacturer ID": f"0x{mfr_id:02X}",
+          "Device type code": f"0x{dev_type:02X}",
+          "HART revision": payload[3],
+          "_unique_id": bytes([mfr_id, dev_type]) + payload[8:11]
+        }
+      return {"error": f"HART 5 format error: Expected 12 bytes, got {payload_len}"}
+
+    # HART 5/6 Cmd0 response is exactly 12 bytes; extra bytes without
+    # expansion code 0xFE at byte[0] means the frame is malformed.
+    if payload_len > 12:
+      return {
+        "error": (
+          f"HART 5 format error: byte[0]=0x{payload[0]:02X} is not expansion "
+          f"code 0xFE, but payload is {payload_len} bytes (expected 12). "
+          f"Possible wrong expansion byte or corrupted frame."
+        )
+      }
+
+    hart_rev = payload[3]
+    if hart_rev > 6:
+      return {"error": f"HART 5 format error: Missing expansion code 254 but HART Revision is {hart_rev}"}
+
+    mfr_id = payload[0]
+    dev_type = payload[1]
+    dev_rev = payload[4]
+    sw_rev = payload[5]
+    hw_rev = payload[6]
+    flags = payload[7]
+    dev_id = payload[8:11]
+    max_vars = None
+    cfg_count = None
+    ext_status = None
+    fmt = "HART 5 (Legacy)"
+
   return {
-    "Manufacturer ID": f"0x{mfr_id:02X} ({KNOWN_MANUFACTURERS.get(mfr_id, 'Unknown')})",
+    "Protocol Format": fmt,
+    "Manufacturer ID": f"0x{mfr_id:02X}",
     "Device type code": f"0x{dev_type:02X}",
-    "Min preambles req": preambles,
     "HART revision": hart_rev,
     "Device revision": dev_rev,
     "Software revision": sw_rev,
     "Hardware revision": hw_rev >> 3,
-    "Physical signaling": hw_rev & 0x07,
     "Flags": f"0x{flags:02X}",
     "Device ID": f"{dev_id[0]:02X}:{dev_id[1]:02X}:{dev_id[2]:02X}",
-    "Response preambles": num_resp_pre,
+    "Max Device Variables": max_vars,
+    "Config Change Count": cfg_count,
+    "Extended Device Status": f"0x{ext_status:02X}" if ext_status is not None else None,
     "_unique_id": bytes([mfr_id, dev_type]) + bytes(dev_id),
   }
 
@@ -504,11 +561,6 @@ class AutoPollWorker(QThread):
           break
         self.poll_tick.emit(addr, cmd, data)
         time.sleep(self._interval)
-
-  def stop(self):
-    self._running = False
-    self.wait()
-
 
   def stop(self):
     self._running = False
@@ -1198,16 +1250,24 @@ class HartMasterSim(QMainWindow):
 
     # Learn unique ID from Cmd0
     decoded = parsed.get("_decoded")
-    if cmd == 0 and decoded and "_unique_id" in decoded:
-      uid = decoded["_unique_id"]
-      self._unique_id = uid
-      uid_str = " ".join(f"{b:02X}" for b in uid)
-      self._le_unique_id.setText(uid_str)
-      self._lbl_unique_learned.setText(f"✓ Learned: {uid_str}")
-      self._lbl_unique_learned.setStyleSheet("color: #4caf50;")
+    if cmd == 0 and decoded:
+      if "error" in decoded:
+        self._log_info(
+          f"⚠  Cmd0 decode error: {decoded['error']}",
+          color=LOG_RX_ERR_COLOR,
+        )
+        self._lbl_unique_learned.setText("✗ Decode failed")
+        self._lbl_unique_learned.setStyleSheet("color: #f87171;")
+      elif "_unique_id" in decoded:
+        uid = decoded["_unique_id"]
+        self._unique_id = uid
+        uid_str = " ".join(f"{b:02X}" for b in uid)
+        self._le_unique_id.setText(uid_str)
+        self._lbl_unique_learned.setText(f"✓ Learned: {uid_str}")
+        self._lbl_unique_learned.setStyleSheet("color: #4caf50;")
 
     # Append parsed info to log
-    cs_status = "✓ CheskSum OK" if parsed.get("cs_ok") else "✗ CheskSum FAIL"
+    cs_status = "✓ Checksum OK" if parsed.get("cs_ok") else "✗ Checksum FAIL"
     cs_color = LOG_RX_OK_COLOR if parsed.get("cs_ok") else LOG_RX_ERR_COLOR
 
     status_text = parsed['status_text']
@@ -1413,10 +1473,13 @@ class HartMasterSim(QMainWindow):
     decoded = parsed.get("_decoded")
     if decoded:
       rows.append(("", ""))  # separator
-      rows.append(("-- DECODED FIELDS --", ""))
-      for k, v in decoded.items():
-        if not k.startswith("_"):
-          rows.append((k, str(v)))
+      if "error" in decoded:
+        rows.append(("⚠ DECODE ERROR", decoded["error"]))
+      else:
+        rows.append(("-- DECODED FIELDS --", ""))
+        for k, v in decoded.items():
+          if not k.startswith("_"):
+            rows.append((k, str(v)))
 
     self._decode_table.setRowCount(len(rows))
     for i, (k, v) in enumerate(rows):
@@ -1429,7 +1492,7 @@ class HartMasterSim(QMainWindow):
       if k.startswith("--") or k == "":
         item_k.setForeground(QColor("#60a5fa"))
         item_v.setForeground(QColor("#60a5fa"))
-      elif "FAIL" in v or "ERROR" in v:
+      elif "FAIL" in v.upper() or "ERROR" in v.upper():
         item_v.setForeground(QColor("#f87171"))
       elif v.startswith("✓"):
         # Boosted green from #34d399 to high-visibility #4ade80
@@ -1771,13 +1834,13 @@ class HartMasterSim(QMainWindow):
     # Append status/latency summary lines matching manual command output
     if parsed and parsed.get("ok"):
       cmd_num = parsed.get("cmd", "?")
-      cs_status = "\u2713 CheskSum OK" if parsed.get("cs_ok") else "\u2717 CheskSum FAIL"
+      cs_status = "✓ Checksum OK" if parsed.get("cs_ok") else "✗ Checksum FAIL"
       cs_color = LOG_RX_OK_COLOR if parsed.get("cs_ok") else LOG_RX_ERR_COLOR
       status_text = parsed["status_text"]
       if not parsed.get("cs_ok"):
         status_text += ", CheckSum FAIL"
       summary_lines = [
-        (f"  \u2514\u2500 CMD={cmd_num}  st1=0x{parsed['st1']:02X}  st2=0x{parsed['st2']:02X}  "
+        (f"  └─ CMD={cmd_num}  st1=0x{parsed['st1']:02X}  st2=0x{parsed['st2']:02X}  "
          f"{cs_status}  latency={latency_ms:.0f}ms", cs_color),
         (f"     Status: {status_text}",
          LOG_DECODED_COLOR if parsed.get("cs_ok") else LOG_RX_ERR_COLOR),
