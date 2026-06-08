@@ -408,6 +408,32 @@ def decode_cmd48(payload: bytes) -> dict:
     lines[f"Extended status byte {i}"] = f"0x{b:02X} ({b:08b}b)"
   return lines
 
+def decode_cmd54(payload: bytes) -> dict:
+  if len(payload) < 23:
+    return {"error": f"Too short: {len(payload)} bytes (need 23)"}
+
+  dv_code = payload[0]
+  transducer_sn = (payload[1] << 16) | (payload[2] << 8) | payload[3]
+  units_code = payload[4]
+  upper_limit = struct.unpack(">f", payload[5:9])[0]
+  lower_limit = struct.unpack(">f", payload[9:13])[0]
+  damping = struct.unpack(">f", payload[13:17])[0]
+  min_span = struct.unpack(">f", payload[17:21])[0]
+  classification = payload[21]
+  family = payload[22]
+
+  return {
+    "Device Variable Code": f"{dv_code}",
+    "Transducer Serial Number": f"{transducer_sn}",
+    "Limits/Min Span Units": f"{units_code} ({UNIT_CODES.get(units_code, 'unknown')})",
+    "Upper Transducer Limit": f"{upper_limit:.4f}",
+    "Lower Transducer Limit": f"{lower_limit:.4f}",
+    "Damping Value": f"{damping:.4f} s",
+    "Minimum Span": f"{min_span:.4f}",
+    "Classification": f"{classification}",
+    "Family": f"{family}"
+  }
+
 
 def _decode_packed_ascii(data: bytes) -> str:
   """Decode HART packed-ASCII (6-bit encoding, 3 bytes → 4 chars)."""
@@ -432,6 +458,7 @@ def decode_response(cmd: int, payload: bytes) -> dict | None:
     14: decode_cmd14,
     20: decode_cmd20,
     48: decode_cmd48,
+    54: decode_cmd54,
   }
   fn = decoders.get(cmd)
   return fn(payload) if fn else None
@@ -902,11 +929,11 @@ class HartMasterSim(QMainWindow):
     layout.setSpacing(3)
 
     commands = [
-      (0,  "Cmd 0 - Read Unique Identifier"),
-      (1,  "Cmd 1 - Read Primary Variable"),
-      (2,  "Cmd 2 - Read Loop Current + %"),
-      (3,  "Cmd 3 - Read Dynamic Variables"),
-      (6,  "Cmd 6 - Write Polling Address"),
+      (0, "Cmd 0 - Read Unique Identifier"),
+      (1, "Cmd 1 - Read Primary Variable"),
+      (2, "Cmd 2 - Read Loop Current + %"),
+      (3, "Cmd 3 - Read Dynamic Variables"),
+      (6, "Cmd 6 - Write Polling Address"),
       (11, "Cmd 11 - Read Unique ID by Tag"),
       (12, "Cmd 12 - Read Message"),
       (13, "Cmd 13 - Read Tag/Descriptor/Date"),
@@ -915,15 +942,26 @@ class HartMasterSim(QMainWindow):
       (16, "Cmd 16 - Read Final Assembly"),
       (20, "Cmd 20 - Read Long Tag"),
       (48, "Cmd 48 - Read Additional Status"),
+      (54, "Cmd 54 - Read Device Variable Info"),
     ]
 
     for cmd_num, label in commands:
       btn = QPushButton(label)
       btn.setFixedHeight(22)
-      btn.clicked.connect(lambda checked, c=cmd_num, l=label: self._send_command(c, b"", l))
+      if cmd_num == 54:
+        btn.clicked.connect(self._send_cmd54_prompt)
+      else:
+        btn.clicked.connect(lambda checked, c=cmd_num, l=label: self._send_command(c, b"", l))
       layout.addWidget(btn)
 
     return grp
+
+  def _send_cmd54_prompt(self):
+    from PyQt5.QtWidgets import QInputDialog
+    # Set Device Variable Code as PV_CODE = 246 by default
+    dv_code, ok = QInputDialog.getInt(self, "Command 54", "Enter Device Variable Code (0-255):", 246, 0, 255, 1)
+    if ok:
+      self._send_command(54, bytes([dv_code]), "Cmd 54 - Read Device Variable Info")
 
   def _build_autopoll_panel(self):
     grp = QGroupBox("AUTO-POLL")
