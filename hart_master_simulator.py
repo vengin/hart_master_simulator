@@ -88,6 +88,7 @@ RESPONSE_CODES = {
   19: "Device variable index not allowed",
   20: "Invalid extended device status",
   32: "Device busy",
+  38: "Tag Mismatch Error",
   64: "Command not implemented",
 }
 
@@ -436,7 +437,7 @@ def decode_cmd54(payload: bytes) -> dict:
 
 
 def _decode_packed_ascii(data: bytes) -> str:
-  """Decode HART packed-ASCII (6-bit encoding, 3 bytes → 4 chars)."""
+  """Decode HART packed-ASCII (6-bit encoding, 3 bytes -> 4 chars)."""
   result = []
   for i in range(0, len(data) - 2, 3):
     b0, b1, b2 = data[i], data[i+1], data[i+2]
@@ -447,12 +448,34 @@ def _decode_packed_ascii(data: bytes) -> str:
   return "".join(result)
 
 
+def _encode_packed_ascii(tag: str) -> bytes:
+  """Encode a string into 6-byte HART Packed ASCII (8 chars -> 6 bytes).
+  Input is padded/truncated to 8 characters, characters clamped to 0x20-0x5F.
+  """
+  s = tag.upper().ljust(8)[:8]
+  chars = [max(0, min(0x3F, ord(c) - 0x20)) for c in s]
+  result = bytearray(6)
+  result[0] = ((chars[0] & 0x3F) << 2) | ((chars[1] >> 4) & 0x03)
+  result[1] = ((chars[1] & 0x0F) << 4) | ((chars[2] >> 2) & 0x0F)
+  result[2] = ((chars[2] & 0x03) << 6) | (chars[3] & 0x3F)
+  result[3] = ((chars[4] & 0x3F) << 2) | ((chars[5] >> 4) & 0x03)
+  result[4] = ((chars[5] & 0x0F) << 4) | ((chars[6] >> 2) & 0x0F)
+  result[5] = ((chars[6] & 0x03) << 6) | (chars[7] & 0x3F)
+  return bytes(result)
+
+
+def decode_cmd11(payload: bytes) -> dict:
+  """Command 11 response data is identical to Command 0 (HART 7 spec)."""
+  return decode_cmd0(payload)
+
+
 def decode_response(cmd: int, payload: bytes) -> dict | None:
   decoders = {
-    0: decode_cmd0,
-    1: decode_cmd1,
-    2: decode_cmd2,
-    3: decode_cmd3,
+    0:  decode_cmd0,
+    1:  decode_cmd1,
+    2:  decode_cmd2,
+    3:  decode_cmd3,
+    11: decode_cmd11,
     12: decode_cmd12,
     13: decode_cmd13,
     14: decode_cmd14,
@@ -948,13 +971,54 @@ class HartMasterSim(QMainWindow):
     for cmd_num, label in commands:
       btn = QPushButton(label)
       btn.setFixedHeight(22)
-      if cmd_num == 54:
+      if cmd_num == 11:
+        btn.clicked.connect(self._send_cmd11_prompt)
+      elif cmd_num == 54:
         btn.clicked.connect(self._send_cmd54_prompt)
       else:
         btn.clicked.connect(lambda checked, c=cmd_num, l=label: self._send_command(c, b"", l))
       layout.addWidget(btn)
 
     return grp
+
+  def _send_cmd11_prompt(self):
+    """Command 11 - Read Unique Identifier by Tag (HART 7).
+
+    Prompts for an 8-character Packed ASCII tag (Bytes 0-5 of request),
+    encodes it to 6 bytes Packed ASCII, and sends via broadcast short frame
+    (address 0) or long frame if a unique ID is already learned, per spec.
+    Response is identical to Command 0.
+    """
+    from PyQt5.QtWidgets import QInputDialog
+    tag_str, ok = QInputDialog.getText(
+      self,
+      "Command 11 - Read Unique ID by Tag",
+      "Enter Tag (up to 8 chars, Packed ASCII, uppercase):",
+      text="TAG1"
+    )
+    if not ok:
+      return
+    tag_data = _encode_packed_ascii(tag_str)
+    # Spec: may use long frame address or broadcast address (short addr 0).
+    # Use long frame if unique_id learned, otherwise broadcast short frame addr=0.
+    if self._unique_id:
+      self._worker.queue_command(
+        0, 11, tag_data,
+        use_long=True, unique_id=self._unique_id,
+        label="Cmd 11 - Read Unique ID by Tag"
+      )
+    else:
+      self._worker.queue_command(
+        0, 11, tag_data,
+        use_long=False, unique_id=None,
+        label="Cmd 11 - Read Unique ID by Tag (broadcast)"
+      )
+    encoded_hex = " ".join(f"{b:02X}" for b in tag_data)
+    self._log_info(
+      f"  Cmd 11: tag={repr(tag_str.upper().ljust(8)[:8])}  "
+      f"packed={encoded_hex}  "
+      f"frame={'long' if self._unique_id else 'broadcast short'}"
+    )
 
   def _send_cmd54_prompt(self):
     from PyQt5.QtWidgets import QInputDialog
