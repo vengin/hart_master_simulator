@@ -1609,7 +1609,10 @@ class HartMasterSim(QMainWindow):
         item_k.setForeground(QColor("#60a5fa"))
         item_v.setForeground(QColor("#60a5fa"))
       elif "FAIL" in v.upper() or "ERROR" in v.upper():
-        item_v.setForeground(QColor("#f87171"))
+        if "0x00" in v:
+          item_v.setForeground(QColor("#93c5fd"))
+        else:
+          item_v.setForeground(QColor("#f87171"))
       elif v.startswith("✓"):
         # Boosted green from #34d399 to high-visibility #4ade80
         item_v.setForeground(QColor("#4ade80"))
