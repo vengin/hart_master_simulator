@@ -34,13 +34,28 @@ DELIM_SHORT_SLAVE   = 0x06  # Short frame, slave → master
 DELIM_LONG_SLAVE    = 0x86  # Long frame, slave → master
 
 UNIT_CODES = {
-  0: "Special", 1: "in H2O @ 68°F", 2: "in Hg @ 0°C", 3: "ft H2O @ 68°F",
-  4: "mm H2O @ 68°F", 5: "mm Hg @ 0°C", 6: "psi", 7: "bar", 8: "mbar",
-  9: "g/cm²", 10: "kg/cm²", 11: "Pa", 12: "kPa", 13: "torr",
-  32: "°C", 33: "°F", 34: "°R", 35: "K",
-  39: "mA", 40: "%", 41: "rpm", 42: "Hz", 43: "m/s", 44: "ft/s",
-  57: "m³/s", 58: "m³/min", 59: "m³/h", 74: "l/s", 75: "l/min", 76: "l/h",
-  250: "Not classified", 251: "Not used",
+  # Pressure
+  1: "inH2O @ 68°F", 2: "inHg @ 0°C", 3: "ftH2O @ 68°F", 4: "mmH2O @ 68°F",
+  5: "mmHg @ 0°C", 6: "psi", 7: "bar", 8: "mbar", 9: "g/cm²", 10: "kg/cm²",
+  11: "Pa", 12: "kPa", 13: "torr", 14: "atm",
+  # Volumetric flow / velocity
+  15: "ft³/min", 16: "gal/min", 17: "l/min", 18: "impgal/min", 19: "m³/h",
+  20: "ft/s", 21: "m/s", 22: "gal/s", 23: "Mgal/day", 24: "l/s", 25: "Ml/day",
+  26: "ft³/s", 27: "ft³/day", 28: "m³/s", 29: "m³/day", 30: "impgal/h",
+  31: "impgal/day",
+  # Temperature, electrical
+  32: "°C", 33: "°F", 34: "°R", 35: "K", 36: "mV", 37: "Ω", 38: "Hz", 39: "mA",
+  # Volume, length, time
+  40: "gal", 41: "l", 42: "impgal", 43: "m³", 44: "ft", 45: "m", 46: "bbl",
+  47: "in", 48: "cm", 49: "mm", 50: "min", 51: "s", 52: "h", 53: "d",
+  # Misc
+  54: "cSt", 55: "cP", 56: "µS", 57: "%", 58: "V", 59: "pH",
+  # Mass
+  60: "g", 61: "kg", 62: "t", 63: "lb", 64: "short ton", 65: "long ton",
+  237: "MPa",
+  250: "Not used", 251: "None", 252: "Unknown", 253: "Special",
+  # Codes 170-219 are unit-code expansion (meaning depends on the device
+  # variable classification, Common Table 21) and are not decoded here.
 }
 
 COMM_STATUS_BITS = {
@@ -133,8 +148,10 @@ def build_long_frame(unique_id: bytes, command: int, data: bytes = b"",
                      master_type: str = "primary") -> bytes:
   """unique_id: 5 bytes (manufacturer[1] + devtype[1] + devid[3])"""
   delim = DELIM_LONG_MASTER if master_type == "primary" else DELIM_LONG_SECOND
-  # Long address: bit7 of first byte = 1 marks slave address
-  addr_bytes = bytes([unique_id[0] | 0x80]) + unique_id[1:5]
+  # Long address: bit7 = master type (1 = primary), bit6 = burst flag (0 in a
+  # master request), bits5-0 = upper 6 bits of the expanded device type.
+  first = (unique_id[0] & 0x3F) | (0x80 if master_type == "primary" else 0x00)
+  addr_bytes = bytes([first]) + unique_id[1:5]
   frame_body = bytes([delim]) + addr_bytes + bytes([command, len(data)]) + data
   cs = calc_checksum(frame_body)
   return bytes([0xFF] * preamble_count) + frame_body + bytes([cs])
@@ -222,6 +239,38 @@ def parse_response(raw: bytes) -> dict | None:
     return {"error": str(e), "raw": raw}
 
 
+def check_rc(step: dict, parsed: dict, saved: dict | None = None) -> tuple[bool, str]:
+  """Evaluate optional response-code expectations of a scenario step.
+
+  Step keys:
+    expect_rc  int | list[int] | callable(saved) -> (list[int] | None, info_str)
+               response code must be one of these (callable decides at run time
+               from values saved by earlier steps; None = do not check)
+    reject_rc  int | list[int]   response code must NOT be one of these
+  Returns (ok, message). message is a failure reason, or an info text when ok.
+  """
+  expect = step.get("expect_rc")
+  reject = step.get("reject_rc")
+  if expect is None and reject is None:
+    return True, ""
+  info = ""
+  if callable(expect):
+    expect, info = expect(saved or {})
+  if isinstance(expect, int):
+    expect = [expect]
+  if isinstance(reject, int):
+    reject = [reject]
+  st1 = parsed.get("st1", 0)
+  if st1 & 0x80:
+    return False, f"Communication error in response (st1=0x{st1:02X}) - response code cannot be evaluated"
+  rc_txt = f"RC={st1} ({RESPONSE_CODES.get(st1, 'unknown')})"
+  if reject and st1 in reject:
+    return False, f"{rc_txt} - must not be {sorted(reject)}"
+  if expect is not None and st1 not in expect:
+    return False, f"{rc_txt} - expected {sorted(expect)}"
+  return True, info
+
+
 # --- COMMAND DECODERS -------------------------------------------------------
 
 # Modified decode_cmd0 in hart_master_simulator.py for HART 7
@@ -262,7 +311,7 @@ def decode_cmd0(payload: bytes) -> dict:
           "Manufacturer ID": f"0x{mfr_id:02X}",
           "Device type code": f"0x{dev_type:02X}",
           "HART revision": payload[3],
-          "_unique_id": bytes([mfr_id, dev_type]) + payload[8:11]
+          "_unique_id": bytes([mfr_id & 0x3F, dev_type]) + payload[8:11]
         }
       return {"error": f"HART 5 format error: Expected 12 bytes, got {payload_len}"}
 
@@ -306,7 +355,7 @@ def decode_cmd0(payload: bytes) -> dict:
     "Max Device Variables": max_vars,
     "Config Change Count": cfg_count,
     "Extended Device Status": f"0x{ext_status:02X}" if ext_status is not None else None,
-    "_unique_id": bytes([mfr_id, dev_type]) + bytes(dev_id),
+    "_unique_id": bytes([mfr_id & 0x3F, dev_type]) + bytes(dev_id),
   }
 
 
@@ -373,16 +422,17 @@ def decode_cmd13(payload: bytes) -> dict:
 
 
 def decode_cmd14(payload: bytes) -> dict:
-  if len(payload) < 6:
-    return {"error": f"Too short: {len(payload)} bytes"}
-  pv_code = payload[0]
-  units = payload[1]
-  upper = struct.unpack(">f", payload[2:6])[0]
-  lower = struct.unpack(">f", payload[6:10])[0] if len(payload) >= 10 else float("nan")
-  min_span = struct.unpack(">f", payload[10:14])[0] if len(payload) >= 14 else float("nan")
+  # Sensor S/N (3) + limits/span units (1) + upper limit (4) + lower limit (4) + min span (4)
+  if len(payload) < 16:
+    return {"error": f"Too short: {len(payload)} bytes (need 16)"}
+  sn = (payload[0] << 16) | (payload[1] << 8) | payload[2]
+  units = payload[3]
+  upper = struct.unpack(">f", payload[4:8])[0]
+  lower = struct.unpack(">f", payload[8:12])[0]
+  min_span = struct.unpack(">f", payload[12:16])[0]
   return {
-    "PV transducer S/N": f"{pv_code}",
-    "PV units": f"{units} ({UNIT_CODES.get(units, 'unknown')})",
+    "PV sensor serial number": f"{sn}",
+    "Limits/span units": f"{units} ({UNIT_CODES.get(units, 'unknown')})",
     "Upper sensor limit": f"{upper:.4f}",
     "Lower sensor limit": f"{lower:.4f}",
     "Minimum span": f"{min_span:.4f}",
@@ -667,6 +717,7 @@ class ScenarioRunner(QThread):
     self._poll_addr = poll_addr
     self._abort = False
     self._saved = {}   # name -> response payload captured by steps with "_save"
+    self.rc_results = {}   # step idx -> (ok, message) from check_rc()
 
   def abort(self):
     self._abort = True
@@ -752,9 +803,11 @@ class ScenarioRunner(QThread):
           latency_ms = (t_first_byte - t_tx_end) * 1000.0
         else:
           latency_ms = (time.perf_counter() - t_tx_end) * 1000.0  # timeout, no response
+        parsed = parse_response(raw)
+        if parsed and parsed.get("ok"):
+          self.rc_results[idx] = check_rc(step, parsed, self._saved)
         self.step_done.emit(idx, label, frame, raw, latency_ms)
 
-        parsed = parse_response(raw)
         step_addr = step.get("_addr", self._poll_addr)
         addr_mismatch = step_addr != self._poll_addr
 
@@ -768,7 +821,10 @@ class ScenarioRunner(QThread):
           # Multi-drop sweep: no response at a non-configured address = correct
           ok_count += 1
         elif parsed and parsed.get("ok"):
-          ok_count += 1
+          if self.rc_results.get(idx, (True, ""))[0]:
+            ok_count += 1
+          else:
+            fail_count += 1
           if save_key and parsed.get("st1") == 0 and parsed.get("cs_ok"):
             self._saved[save_key] = bytes(parsed.get("payload", b""))
           # Update unique ID if we learned it
@@ -793,7 +849,7 @@ class ScenarioRunner(QThread):
 class HartMasterSim(QMainWindow):
   def __init__(self):
     super().__init__()
-    self.setWindowTitle("HART Master Simulator  v1.01")
+    self.setWindowTitle("HART Master Simulator  v1.0")
     self.setMinimumSize(1400, 750)
     self.resize(1400, 860)
 
@@ -2020,6 +2076,17 @@ class HartMasterSim(QMainWindow):
           self._lbl_unique_learned.setText(f"✓ Learned: {uid_str}")
           self._lbl_unique_learned.setStyleSheet("color: #4caf50;")
 
+      # Response-code expectations (expect_rc / reject_rc) evaluated by the runner
+      rc_res = getattr(self._scenario_runner, "rc_results", {}).get(idx)
+      rc_msg = None
+      rc_info = ""
+      if rc_res:
+        if ok and not rc_res[0]:
+          ok = False
+          rc_msg = rc_res[1]
+        elif rc_res[0]:
+          rc_info = rc_res[1]
+
       # Multi-drop: silence on a non-matching address is correct, not an error
       sc_name = self._cb_scenario.currentText()
       step_def = SCENARIOS.get(sc_name, {}).get("steps", [])
@@ -2030,12 +2097,17 @@ class HartMasterSim(QMainWindow):
         result_text = "✓ SILENT (no device at this addr)"
         result_color = "#4ade80"
       else:
-        result_text = "✓ OK" if ok else ("✗ NO RESPONSE" if not rx else "✗ PARSE ERR")
+        if rc_msg:
+          result_text = "✗ RC MISMATCH"
+        else:
+          result_text = "✓ OK" if ok else ("✗ NO RESPONSE" if not rx else "✗ PARSE ERR")
         result_color = "#4ade80" if ok else "#f87171"
 
       if not ok:
         hint = ""
-        if not rx:
+        if rc_msg:
+          hint = rc_msg
+        elif not rx:
           hint = "No response - check: baud/parity (1200 8O1), preamble count, address, wiring."
         elif parsed and not parsed.get("cs_ok"):
           hint = "Response received but checksum failed - possible line noise or half-duplex echo."
@@ -2043,6 +2115,8 @@ class HartMasterSim(QMainWindow):
           hint = f"Parse error: {parsed['error']}"
         if hint:
           self._scenario_hints.append(f"  ⚠ Step {idx+1}: {hint}\n")
+      if ok and rc_info:
+        self._scenario_hints.append(f"  ℹ Step {idx+1}: {rc_info}\n")
 
     result_item = self._scenario_table.item(idx, 2)
     if not result_item:

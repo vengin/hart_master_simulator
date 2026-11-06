@@ -49,6 +49,24 @@ _WR_TAG_DATA = _TAG_PACKED + _pack_ascii(UAL_DESC, 16) + UAL_DATE   # 6+12+3 = 2
 _WR_MSG_DATA = _pack_ascii(UAL_MESSAGE, 32)                         # 24 bytes
 
 
+def _wp_expect(show_info=False):
+  """expect_rc callable for UAL009 write attempts: decided from the write-protect
+  code saved from Cmd15 (data byte 15): 1 -> writes must return RC 7,
+  0 / 250 -> writes must succeed (RC 0)."""
+  def fn(saved):
+    p = saved.get("wp")
+    if p is None or len(p) < 16:
+      return None, "Write-protect code unavailable (Cmd15 read failed) - RC not checked"
+    code = p[15]
+    if code == 1:
+      return [7], ""
+    if code in (0, 250):
+      return [0], ("Write protect is OFF (code %d) - writes succeeded; RC 7 behaviour "
+                   "NOT tested. Enable write protect and rerun." % code) if show_info else ""
+    return None, "Unexpected write-protect code %d - RC not checked" % code
+  return fn
+
+
 def _ual_steps():
   S = []
   # ---- Setup (needed so long-address, Cmd11 and Cmd21 steps can match) ----
@@ -72,6 +90,7 @@ def _ual_steps():
   ]
 
   # ---- 3.1 UAL000: every universal command must be implemented (RC != 64) ----
+  n_ual000 = len(S)
   S += [
     _s("[3.1 UAL000] Cmd0",  0,  long=True, note="UAL000: RC must NOT be 64 (command not implemented)."),
     _s("[3.1 UAL000] Cmd1",  1,  long=True, note="UAL000: RC != 64."),
@@ -97,6 +116,9 @@ def _ual_steps():
     _s("[3.1 UAL000] Cmd38", 38, long=True, note="UAL000: RC != 64."),
     _s("[3.1 UAL000] Cmd48", 48, long=True, note="UAL000: RC != 64."),
   ]
+
+  for st in S[n_ual000:]:
+    st["reject_rc"] = [64]   # UAL000 fails if any command is "not implemented"
 
   # ---- 3.2 UAL001: Commands 1, 2, 3 ----
   S += [
@@ -172,13 +194,13 @@ def _ual_steps():
 
   # ---- 3.9 UAL009: Write protect ----
   S += [
-    _s("[3.9 UAL009] Cmd15 - read write-protect code", 15,
-       note="Write-protect code 251 = none, 1 = yes. If 'yes', every write below must return RC=7."),
-    _s("[3.9 UAL009] Cmd6 write attempt",  6,  long=True, _data_from="poll", note="RC=7 expected if write-protected."),
-    _s("[3.9 UAL009] Cmd17 write attempt", 17, _WR_MSG_DATA,  note="RC=7 expected if write-protected."),
-    _s("[3.9 UAL009] Cmd18 write attempt", 18, _WR_TAG_DATA,  note="RC=7 expected if write-protected."),
-    _s("[3.9 UAL009] Cmd19 write attempt", 19, UAL_ASSEMBLY,  note="RC=7 expected if write-protected."),
-    _s("[3.9 UAL009] Cmd22 write attempt", 22, UAL_LONG_TAG, long=True, note="RC=7 expected if write-protected."),
+    _s("[3.9 UAL009] Cmd15 - read write-protect code", 15, _save="wp",
+       note="Write-protect code is Cmd15 data byte 15: 0 = no, 1 = yes, 250 = not used. If 1, every write below must return RC=7."),
+    _s("[3.9 UAL009] Cmd6 write attempt",  6,  long=True, _data_from="poll", expect_rc=_wp_expect(True), note="RC=7 expected if write-protected."),
+    _s("[3.9 UAL009] Cmd17 write attempt", 17, _WR_MSG_DATA, expect_rc=_wp_expect(), note="RC=7 expected if write-protected."),
+    _s("[3.9 UAL009] Cmd18 write attempt", 18, _WR_TAG_DATA, expect_rc=_wp_expect(), note="RC=7 expected if write-protected."),
+    _s("[3.9 UAL009] Cmd19 write attempt", 19, UAL_ASSEMBLY, expect_rc=_wp_expect(), note="RC=7 expected if write-protected."),
+    _s("[3.9 UAL009] Cmd22 write attempt", 22, UAL_LONG_TAG, long=True, expect_rc=_wp_expect(), note="RC=7 expected if write-protected."),
     _s("[3.9 UAL009] Cmd0 - verify still alive", 0),
   ]
 
