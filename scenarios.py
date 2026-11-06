@@ -10,6 +10,258 @@
 #   delay_post float – sleep AFTER response received (seconds)
 #   note       str   – diagnostic hint shown in log before step
 
+# ---------------------------------------------------------------------------
+# Helpers for scenario 17 (Universal Command Conformance, test defs 3.1-3.17)
+# ---------------------------------------------------------------------------
+def _pack_ascii(text: str, nchars: int) -> bytes:
+  """HART Packed-ASCII (spec): pad/truncate to nchars, keep low 6 bits of each
+  char, 4 chars -> 3 bytes. Space (0x20) packs to 0x82 0x08 0x20 per 4 chars."""
+  s = text.upper().ljust(nchars)[:nchars]
+  v = [ord(c) & 0x3F for c in s]
+  out = bytearray()
+  for i in range(0, nchars, 4):
+    a, b, c, d = v[i:i + 4]
+    out += bytes([(a << 2) | (b >> 4), ((b & 0x0F) << 4) | (c >> 2), ((c & 0x03) << 6) | d])
+  return bytes(out)
+
+
+def _s(label, cmd, data=b"", long=False, master="primary",
+       pre=0.3, post=0.3, note="", **extra):
+  """Compact step builder (same keys the ScenarioRunner understands)."""
+  step = {"label": label, "cmd": cmd, "data": data, "use_long": long,
+          "preambles": 5, "master": master, "delay_pre": pre, "delay_post": post,
+          "note": note}
+  step.update(extra)
+  return step
+
+
+# Test values - edit here if you want different write patterns.
+UAL_TAG        = "UALTAG01"                       # 8 chars  -> 6 bytes packed
+UAL_DESC       = "UAL CONFORMANCE"                # 16 chars -> 12 bytes packed
+UAL_DATE       = bytes([6, 11, 126])              # day, month, year-1900 (06 Nov 2026)
+UAL_MESSAGE    = "UAL CONFORMANCE TEST MESSAGE"   # 32 chars -> 24 bytes packed
+UAL_ASSEMBLY   = bytes([0x01, 0x23, 0x45])        # final assembly number (3 bytes)
+UAL_LONG_TAG   = "UAL-CONFORMANCE-LONG-TAG-0001".ljust(32).encode("latin-1")
+UAL_POLL_TEST  = 1                                # temporary polling address for UAL003
+
+_TAG_PACKED  = _pack_ascii(UAL_TAG, 8)
+_WR_TAG_DATA = _TAG_PACKED + _pack_ascii(UAL_DESC, 16) + UAL_DATE   # 6+12+3 = 21 bytes
+_WR_MSG_DATA = _pack_ascii(UAL_MESSAGE, 32)                         # 24 bytes
+
+
+def _ual_steps():
+  S = []
+  # ---- Setup (needed so long-address, Cmd11 and Cmd21 steps can match) ----
+  S += [
+    _s("[Setup] Cmd0 - learn unique ID", 0, pre=0.5,
+       note="Learns the unique ID used by all long-address steps below."),
+    _s("[Setup] Cmd7 - save original polling address", 7, long=True, _save="poll",
+       note="Saved so it can be restored at the end of the scenario."),
+    _s("[Setup] Cmd12 - save original message", 12, long=True, _save="msg",
+       note="Saved for restore."),
+    _s("[Setup] Cmd13 - save original tag/descriptor/date", 13, long=True, _save="tag",
+       note="Saved for restore."),
+    _s("[Setup] Cmd16 - save original final assembly no.", 16, long=True, _save="asm",
+       note="Saved for restore."),
+    _s("[Setup] Cmd20 - save original long tag", 20, long=True, _save="ltag",
+       note="Saved for restore."),
+    _s("[Setup] Cmd18 - write test tag/descriptor/date", 18, _WR_TAG_DATA, long=True,
+       note="Writes UAL_TAG so Cmd11 can match it. Skipped effect if device is write-protected (RC=7)."),
+    _s("[Setup] Cmd22 - write test long tag", 22, UAL_LONG_TAG, long=True,
+       note="Writes UAL_LONG_TAG so Cmd21 can match it."),
+  ]
+
+  # ---- 3.1 UAL000: every universal command must be implemented (RC != 64) ----
+  S += [
+    _s("[3.1 UAL000] Cmd0",  0,  long=True, note="UAL000: RC must NOT be 64 (command not implemented)."),
+    _s("[3.1 UAL000] Cmd1",  1,  long=True, note="UAL000: RC != 64."),
+    _s("[3.1 UAL000] Cmd2",  2,  long=True, note="UAL000: RC != 64."),
+    _s("[3.1 UAL000] Cmd3",  3,  long=True, note="UAL000: RC != 64."),
+    _s("[3.1 UAL000] Cmd6", 6, long=True, _data_from="poll",
+       note="UAL000: RC != 64. Writes back the original polling address / loop current mode (no change)."),
+    _s("[3.1 UAL000] Cmd7",  7,  long=True, note="UAL000: RC != 64."),
+    _s("[3.1 UAL000] Cmd8",  8,  long=True, note="UAL000: RC != 64."),
+    _s("[3.1 UAL000] Cmd9",  9,  bytes([0, 1, 2, 3]), long=True, note="UAL000: RC != 64."),
+    _s("[3.1 UAL000] Cmd11", 11, _TAG_PACKED, long=True, note="UAL000: RC != 64."),
+    _s("[3.1 UAL000] Cmd12", 12, long=True, note="UAL000: RC != 64."),
+    _s("[3.1 UAL000] Cmd13", 13, long=True, note="UAL000: RC != 64."),
+    _s("[3.1 UAL000] Cmd14", 14, long=True, note="UAL000: RC != 64."),
+    _s("[3.1 UAL000] Cmd15", 15, long=True, note="UAL000: RC != 64."),
+    _s("[3.1 UAL000] Cmd16", 16, long=True, note="UAL000: RC != 64."),
+    _s("[3.1 UAL000] Cmd17", 17, _WR_MSG_DATA, long=True, note="UAL000: RC != 64 (RC 7 is fine if write-protected)."),
+    _s("[3.1 UAL000] Cmd18", 18, _WR_TAG_DATA, long=True, note="UAL000: RC != 64 (RC 7 is fine if write-protected)."),
+    _s("[3.1 UAL000] Cmd19", 19, UAL_ASSEMBLY, long=True, note="UAL000: RC != 64 (RC 7 is fine if write-protected)."),
+    _s("[3.1 UAL000] Cmd20", 20, long=True, note="UAL000: RC != 64."),
+    _s("[3.1 UAL000] Cmd21", 21, UAL_LONG_TAG, long=True, note="UAL000: RC != 64."),
+    _s("[3.1 UAL000] Cmd22", 22, UAL_LONG_TAG, long=True, note="UAL000: RC != 64 (RC 7 is fine if write-protected)."),
+    _s("[3.1 UAL000] Cmd38", 38, long=True, note="UAL000: RC != 64."),
+    _s("[3.1 UAL000] Cmd48", 48, long=True, note="UAL000: RC != 64."),
+  ]
+
+  # ---- 3.2 UAL001: Commands 1, 2, 3 ----
+  S += [
+    _s("[3.2 UAL001] Cmd1 - PV (short)",     1, note="UAL001: PV unit code + float. Expect 5 data bytes."),
+    _s("[3.2 UAL001] Cmd1 - PV (long)",      1, long=True, note="Same via long address."),
+    _s("[3.2 UAL001] Cmd2 - current/%range", 2, note="UAL001: loop current + percent of range (8 data bytes)."),
+    _s("[3.2 UAL001] Cmd2 (long)",           2, long=True),
+    _s("[3.2 UAL001] Cmd3 - dynamic vars",   3, note="UAL001: loop current + up to 4 (unit,float) pairs. Values consistent with Cmd1/Cmd2."),
+    _s("[3.2 UAL001] Cmd3 (long)",           3, long=True),
+  ]
+
+  # ---- 3.3 UAL003: Commands 6 and 7 (polling address) ----
+  S += [
+    _s("[3.3 UAL003] Cmd7 - read loop config (before)", 7, long=True,
+       note="Records current polling address + loop current mode."),
+    _s("[3.3 UAL003] Cmd6 - write poll addr = %d" % UAL_POLL_TEST, 6, bytes([UAL_POLL_TEST, 1]), long=True,
+       note="Long-addr write so it works regardless of current polling address."),
+    _s("[3.3 UAL003] Cmd7 - confirm new address", 7, long=True, pre=0.5,
+       note="Response must report the new polling address."),
+    _s("[3.3 UAL003] Cmd0 short @ new addr %d" % UAL_POLL_TEST, 0, pre=0.5, _addr=UAL_POLL_TEST,
+       note="Device must now answer short-frame polling at the new address."),
+    _s("[3.3 UAL003] Cmd6 - restore original poll addr", 6, long=True, _data_from="poll",
+       note="Restores the address saved in setup so remaining steps use the UI poll address."),
+    _s("[3.3 UAL003] Cmd7 - confirm restored", 7, long=True, pre=0.5),
+    _s("[3.3 UAL003] Cmd0 short @ restored addr", 0, pre=0.5,
+       note="Uses the UI 'Poll addr' - must equal the device's original polling address."),
+  ]
+
+  # ---- 3.4 UAL004: Command 11 ----
+  S += [
+    _s("[3.4 UAL004] Cmd11 - matching tag (long)", 11, _TAG_PACKED, long=True,
+       note="Response data must be identical to Cmd0 (manufacturer, type, revs, device ID)."),
+    _s("[3.4 UAL004] Cmd0 - compare with Cmd11", 0, long=True,
+       note="Compare identity fields with the Cmd11 result above."),
+  ]
+
+  # ---- 3.5 UAL005: Commands 12 and 17 ----
+  S += [
+    _s("[3.5 UAL005] Cmd12 - read message (before)", 12, note="24 data bytes (32 packed chars)."),
+    _s("[3.5 UAL005] Cmd17 - write message", 17, _WR_MSG_DATA, post=0.4,
+       note="Writes UAL_MESSAGE. RC=7 means device is write-protected (see 3.9)."),
+    _s("[3.5 UAL005] Cmd12 - read back", 12,
+       note="Must return the message just written."),
+  ]
+
+  # ---- 3.6 UAL006: Commands 13 and 18 ----
+  S += [
+    _s("[3.6 UAL006] Cmd13 - read tag/desc/date (before)", 13, note="21 data bytes."),
+    _s("[3.6 UAL006] Cmd18 - write tag/desc/date", 18, _WR_TAG_DATA, post=0.4,
+       note="Writes UAL_TAG / UAL_DESC / UAL_DATE."),
+    _s("[3.6 UAL006] Cmd13 - read back", 13,
+       note="Tag, descriptor and date must match the values written."),
+  ]
+
+  # ---- 3.7 UAL007: Commands 14 and 15 ----
+  S += [
+    _s("[3.7 UAL007] Cmd14 - PV transducer info", 14,
+       note="Sensor S/N, limits units, upper/lower sensor limits, min span."),
+    _s("[3.7 UAL007] Cmd14 (long)", 14, long=True),
+    _s("[3.7 UAL007] Cmd15 - output info", 15,
+       note="Alarm select, transfer function, range units, upper/lower range, damping, write-protect code, private-label distributor."),
+    _s("[3.7 UAL007] Cmd15 (long)", 15, long=True),
+  ]
+
+  # ---- 3.8 UAL008: Commands 16 and 19 ----
+  S += [
+    _s("[3.8 UAL008] Cmd16 - read final assembly (before)", 16, note="3 data bytes."),
+    _s("[3.8 UAL008] Cmd19 - write final assembly", 19, UAL_ASSEMBLY, post=0.4,
+       note="Writes UAL_ASSEMBLY."),
+    _s("[3.8 UAL008] Cmd16 - read back", 16,
+       note="Must return the value just written."),
+  ]
+
+  # ---- 3.9 UAL009: Write protect ----
+  S += [
+    _s("[3.9 UAL009] Cmd15 - read write-protect code", 15,
+       note="Write-protect code 251 = none, 1 = yes. If 'yes', every write below must return RC=7."),
+    _s("[3.9 UAL009] Cmd6 write attempt",  6,  long=True, _data_from="poll", note="RC=7 expected if write-protected."),
+    _s("[3.9 UAL009] Cmd17 write attempt", 17, _WR_MSG_DATA,  note="RC=7 expected if write-protected."),
+    _s("[3.9 UAL009] Cmd18 write attempt", 18, _WR_TAG_DATA,  note="RC=7 expected if write-protected."),
+    _s("[3.9 UAL009] Cmd19 write attempt", 19, UAL_ASSEMBLY,  note="RC=7 expected if write-protected."),
+    _s("[3.9 UAL009] Cmd22 write attempt", 22, UAL_LONG_TAG, long=True, note="RC=7 expected if write-protected."),
+    _s("[3.9 UAL009] Cmd0 - verify still alive", 0),
+  ]
+
+  # ---- 3.10 UAL010: Cold start bit ----
+  S += [
+    _s("[3.10 UAL010] Cmd0 - check cold start bit", 0, pre=0.5,
+       note="Cold start (ST2 0x20) is only set after a power cycle. Power-cycle DUT and run this scenario right away for a meaningful result."),
+    _s("[3.10 UAL010] Cmd0 - bit must be clear", 0,
+       note="Cold start bit must be cleared after the first exchange."),
+  ]
+
+  # ---- 3.11 UAL011: Command 9 ----
+  S += [
+    _s("[3.11 UAL011] Cmd9 - slots 0..3", 9, bytes([0, 1, 2, 3]), note="Each variable: code, class, units, float, status. Response must echo requested codes."),
+    _s("[3.11 UAL011] Cmd9 - dynamic vars PV/SV/TV/QV (246..249)", 9, bytes([246, 247, 248, 249])),
+    _s("[3.11 UAL011] Cmd9 - single var", 9, bytes([0]), note="Minimal request (1 variable)."),
+    _s("[3.11 UAL011] Cmd9 (long)", 9, bytes([0, 1, 2, 3]), long=True),
+  ]
+
+  # ---- 3.12 UAL012: Command 8 ----
+  S += [
+    _s("[3.12 UAL012] Cmd8 - dynamic variable classification", 8,
+       note="4 data bytes: classification codes for PV/SV/TV/QV."),
+    _s("[3.12 UAL012] Cmd8 (long)", 8, long=True),
+  ]
+
+  # ---- 3.13 UAL013: Commands 20 and 22 ----
+  S += [
+    _s("[3.13 UAL013] Cmd20 - read long tag (before)", 20, note="32 data bytes."),
+    _s("[3.13 UAL013] Cmd22 - write long tag", 22, UAL_LONG_TAG, long=True, post=0.4,
+       note="Writes UAL_LONG_TAG (32 bytes, space padded)."),
+    _s("[3.13 UAL013] Cmd20 - read back", 20, note="Must match the long tag written."),
+  ]
+
+  # ---- 3.14 UAL014: Command 0 ----
+  S += [
+    _s("[3.14 UAL014] Cmd0 (short)", 0, pre=0.5, note="Expect 0xFE expansion code, HART revision, device IDs."),
+    _s("[3.14 UAL014] Cmd0 (long)",  0, long=True, note="Must return same identity as short frame."),
+    _s("[3.14 UAL014] Cmd0 (secondary master)", 0, master="secondary",
+       note="Secondary-master frame must also be answered."),
+  ]
+
+  # ---- 3.15 UAL015: Command 21 ----
+  S += [
+    _s("[3.15 UAL015] Cmd21 - matching long tag", 21, UAL_LONG_TAG, long=True,
+       note="Response data identical to Cmd0."),
+    _s("[3.15 UAL015] Cmd0 - compare with Cmd21", 0, long=True),
+  ]
+
+  # ---- 3.16 UAL038: Command 38 ----
+  S += [
+    _s("[3.16 UAL038] Cmd0 - config-changed bit (before)", 0,
+       note="After the earlier writes, ST2 'Configuration changed' (0x40) is expected to be set."),
+    _s("[3.16 UAL038] Cmd38 - reset configuration changed flag", 38, long=True,
+       note="HART 7 devices may expect the 2-byte config change counter; if RC=5 add it from Cmd0 bytes 14-15."),
+    _s("[3.16 UAL038] Cmd0 - config-changed bit must be clear", 0, pre=0.5,
+       note="'Configuration changed' bit must now be cleared."),
+  ]
+
+  # ---- 3.17 UAL048: Command 48 ----
+  S += [
+    _s("[3.17 UAL048] Cmd48 - additional device status", 48,
+       note="Expect >= 9 status bytes (HART 6/7). Check byte 0-5 specific status, byte 6 ext device status, byte 7 op mode, byte 8 standardized status 0."),
+    _s("[3.17 UAL048] Cmd48 (long)", 48, long=True),
+    _s("[3.17 UAL048] Cmd0 - 'More status available' bit", 0,
+       note="If ST2 0x10 is set, Cmd48 must return non-zero status."),
+  ]
+  # ---- Teardown: restore the original device values saved in setup ----
+  S += [
+    _s("[Restore] Cmd6 - original polling address", 6, long=True, _data_from="poll", post=0.4,
+       note="Writes back the Cmd7 value captured in setup."),
+    _s("[Restore] Cmd17 - original message", 17, long=True, _data_from="msg", post=0.4),
+    _s("[Restore] Cmd18 - original tag/descriptor/date", 18, long=True, _data_from="tag", post=0.4),
+    _s("[Restore] Cmd19 - original final assembly no.", 19, long=True, _data_from="asm", post=0.4),
+    _s("[Restore] Cmd22 - original long tag", 22, long=True, _data_from="ltag", post=0.4),
+    _s("[Restore] Cmd38 - clear config-changed flag", 38, long=True,
+       note="The restore writes set 'Configuration changed' again; clear it. Add the 2-byte counter if RC=5."),
+    _s("[Restore] Cmd0 - final check", 0, pre=0.5,
+       note="Device should answer at its original polling address."),
+  ]
+  return S
+
+
 SCENARIOS = {
   "1 - Cold-Start Enumeration (Rockwell style)": {
     "description": (
@@ -495,5 +747,18 @@ SCENARIOS = {
     "steps": [
       {"label": "Send Unimplemented Cmd 99", "cmd": 99, "data": b"0000", "use_long": False, "preambles": 5, "master": "primary", "delay_pre": 0.3, "delay_post": 0.3, "note": "Slave must respond with error code 64, not time out."}
     ]
+  },
+  "17 - Universal Command Conformance (UAL 3.1-3.17)": {
+    "description": (
+      "HART universal command conformance tests, sections 3.1-3.17:\n"
+      "UAL000 all commands supported | UAL001 Cmd1/2/3 | UAL003 Cmd6/7 | UAL004 Cmd11\n"
+      "UAL005 Cmd12/17 | UAL006 Cmd13/18 | UAL007 Cmd14/15 | UAL008 Cmd16/19\n"
+      "UAL009 write protect | UAL010 cold start | UAL011 Cmd9 | UAL012 Cmd8\n"
+      "UAL013 Cmd20/22 | UAL014 Cmd0 | UAL015 Cmd21 | UAL038 Cmd38 | UAL048 Cmd48\n"
+      "WRITES to device, then restores the original tag, descriptor, date, message,\n"
+      "assembly no., long tag and polling addr (saved in setup). Power-cycle DUT\n"
+      "before the run for UAL010. Poll addr in UI must be the device's current addr."
+    ),
+    "steps": _ual_steps()
   },
 }

@@ -4,7 +4,7 @@ Diagnostic and simulation tool for testing HART slave devices and monitoring pro
 
 ## Features
 
-- **Diagnostic Scenarios**: 16 pre-configured sequences ranging from standard cold-start enumeration to stress testing and invalid command injection.
+- **Diagnostic Scenarios**: Pre-configured sequences ranging from standard cold-start enumeration to stress testing and invalid command injection.
 - **Configurable Physical Layer Parameters**: Supports adjustable preamble counts, parity selection (`8O1`), and exact 1200 baud timing.
 - **Dual-Master Simulation**: Toggle between primary master (`0x02`) and secondary master (`0x01`) roles.
 - **Robust Address Validation**: Supports both short (polling address 0) and long (unique-ID) addressing schemes.

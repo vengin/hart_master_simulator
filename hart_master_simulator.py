@@ -439,21 +439,28 @@ def decode_cmd54(payload: bytes) -> dict:
 def _decode_packed_ascii(data: bytes) -> str:
   """Decode HART packed-ASCII (6-bit encoding, 3 bytes -> 4 chars)."""
   result = []
+  def _unpack6(v: int) -> str:
+    # Spec: top two bits were dropped on packing. Bit5=0 -> original had bit6 set
+    # (0x40-0x5F); bit5=1 -> 0x20-0x3F unchanged.
+    v &= 0x3F
+    return chr(v if v & 0x20 else v | 0x40)
+
   for i in range(0, len(data) - 2, 3):
     b0, b1, b2 = data[i], data[i+1], data[i+2]
-    result.append(chr(((b0 >> 2) & 0x3F) + 0x20))
-    result.append(chr(((b0 << 4 | b1 >> 4) & 0x3F) + 0x20))
-    result.append(chr(((b1 << 2 | b2 >> 6) & 0x3F) + 0x20))
-    result.append(chr((b2 & 0x3F) + 0x20))
+    result.append(_unpack6(b0 >> 2))
+    result.append(_unpack6(b0 << 4 | b1 >> 4))
+    result.append(_unpack6(b1 << 2 | b2 >> 6))
+    result.append(_unpack6(b2))
   return "".join(result)
 
 
 def _encode_packed_ascii(tag: str) -> bytes:
   """Encode a string into 6-byte HART Packed ASCII (8 chars -> 6 bytes).
-  Input is padded/truncated to 8 characters, characters clamped to 0x20-0x5F.
+  Input is padded/truncated to 8 characters. Per HART spec the top two bits of
+  each ASCII char (0x20-0x5F) are dropped, i.e. 6-bit value = ord(c) & 0x3F.
   """
   s = tag.upper().ljust(8)[:8]
-  chars = [max(0, min(0x3F, ord(c) - 0x20)) for c in s]
+  chars = [ord(c) & 0x3F for c in s]
   result = bytearray(6)
   result[0] = ((chars[0] & 0x3F) << 2) | ((chars[1] >> 4) & 0x03)
   result[1] = ((chars[1] & 0x0F) << 4) | ((chars[2] >> 2) & 0x0F)
@@ -659,6 +666,7 @@ class ScenarioRunner(QThread):
     self._unique_id = unique_id
     self._poll_addr = poll_addr
     self._abort = False
+    self._saved = {}   # name -> response payload captured by steps with "_save"
 
   def abort(self):
     self._abort = True
@@ -683,7 +691,19 @@ class ScenarioRunner(QThread):
       corrupt_cs        = step.get("_corrupt_cs", False)
       expect_no_resp    = step.get("expect_no_response", False)
 
+      save_key  = step.get("_save")        # store response payload under this name
+      data_from = step.get("_data_from")   # use a previously saved payload as request data
+
       self.step_started.emit(idx, label, note)
+
+      if data_from:
+        saved = self._saved.get(data_from)
+        if saved is None:
+          self.step_error.emit(idx, label,
+            f"No saved value '{data_from}' to restore (the earlier read failed)")
+          fail_count += 1
+          continue
+        data = saved
 
       time.sleep(delay_pre)
 
@@ -749,6 +769,8 @@ class ScenarioRunner(QThread):
           ok_count += 1
         elif parsed and parsed.get("ok"):
           ok_count += 1
+          if save_key and parsed.get("st1") == 0 and parsed.get("cs_ok"):
+            self._saved[save_key] = bytes(parsed.get("payload", b""))
           # Update unique ID if we learned it
           if cmd == 0 and not corrupt_cs:
             decoded = decode_response(0, parsed.get("payload", b""))
@@ -771,7 +793,7 @@ class ScenarioRunner(QThread):
 class HartMasterSim(QMainWindow):
   def __init__(self):
     super().__init__()
-    self.setWindowTitle("HART Master Simulator  v1.0")
+    self.setWindowTitle("HART Master Simulator  v1.01")
     self.setMinimumSize(1400, 750)
     self.resize(1400, 860)
 
