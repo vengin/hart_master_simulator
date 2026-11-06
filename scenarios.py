@@ -67,6 +67,128 @@ def _wp_expect(show_info=False):
   return fn
 
 
+def _all(*fns):
+  """Combine content checks: first failure wins, infos are concatenated."""
+  def fn(parsed, saved):
+    infos = []
+    for f in fns:
+      ok, msg = f(parsed, saved)
+      if not ok:
+        return False, msg
+      if msg:
+        infos.append(msg)
+    return True, " ".join(infos)
+  return fn
+
+
+def _payload(parsed):
+  return parsed.get("payload", b"")
+
+
+def _chk_cmd0_len(parsed, saved):
+  """Cmd0-format response (Cmd0/11/21): HART 7 needs 22 data bytes, HART 6 needs 17."""
+  p = _payload(parsed)
+  if not p or p[0] != 0xFE:
+    return True, ""                      # legacy HART 5 format, not checked here
+  rev = p[4] if len(p) > 4 else 0
+  need = 22 if rev >= 7 else 17
+  if len(p) < need:
+    miss = (" (manufacturer ID, private-label distributor code and device profile missing)"
+            if rev >= 7 and len(p) >= 17 else "")
+    return False, "HART %d identity response has %d data bytes, expected %d%s" % (rev, len(p), need, miss)
+  return True, ""
+
+
+def _identity(p):
+  return p[:14] + p[17:]                 # skip config counter (14-15) + ext. status (16)
+
+
+def _chk_same_id(key):
+  """Identity data must equal the response saved under `key` (counter/ext status ignored)."""
+  def fn(parsed, saved):
+    ref = saved.get(key)
+    if ref is None:
+      return True, "Reference identity not saved - comparison skipped"
+    p = _payload(parsed)
+    if _identity(p) != _identity(ref):
+      diff = [i for i in range(max(len(p), len(ref)))
+              if i not in (14, 15, 16) and p[i:i + 1] != ref[i:i + 1]]
+      return False, "Identity differs from the reference response at data byte(s) %s" % diff
+    return True, ""
+  return fn
+
+
+def _chk_cmd9(codes):
+  """Cmd9: ext. device status (1) + 8 bytes/slot (code, class, units, value, status) [+ 4-byte timestamp]."""
+  n = len(codes)
+  def fn(parsed, saved):
+    p = _payload(parsed)
+    base = 1 + 8 * n
+    if len(p) not in (base, base + 4):
+      return False, ("Cmd9 for %d variable(s) returned %d data bytes, expected %d (or %d with timestamp): "
+                     "ext. device status + 8 bytes per slot (code, classification, units, value, status)"
+                     % (n, len(p), base, base + 4))
+    for i, c in enumerate(codes):
+      got = p[1 + 8 * i]
+      if got != c:
+        return False, "Slot %d: device variable code %d, requested %d" % (i, got, c)
+    return True, ""
+  return fn
+
+
+def _chk_cmd8(parsed, saved):
+  """Cmd8: four classification codes; valid = 0, 64..127 (Common Table 21 area) or 250 (not used)."""
+  p = _payload(parsed)
+  if len(p) < 4:
+    return False, "Cmd8 returned %d data bytes, expected 4" % len(p)
+  bad = [c for c in p[:4] if not (c == 0 or 64 <= c <= 127 or c == 250)]
+  if bad:
+    return False, "Classification code(s) %s are not valid Device Variable Classification codes" % bad
+  return True, ""
+
+
+def _chk_range_units(parsed, saved):
+  """Cmd15 range units code must equal the PV units code from Cmd1."""
+  pv, p = saved.get("pv"), _payload(parsed)
+  if pv is None or not pv or len(p) < 3:
+    return True, "PV units not saved - range units comparison skipped"
+  if p[2] != pv[0]:
+    return False, "Cmd15 range units code %d differs from Cmd1 PV units code %d" % (p[2], pv[0])
+  return True, ""
+
+
+def _chk_cmd38_counter(parsed, saved):
+  """Cmd38 response = 2-byte configuration change counter, same as in Cmd0."""
+  c0, p = saved.get("c0"), _payload(parsed)
+  if len(p) < 2:
+    return False, "Cmd38 returned %d data bytes, expected the 2-byte configuration change counter" % len(p)
+  if c0 is None or len(c0) < 16:
+    return True, "Cmd0 counter not saved - comparison skipped"
+  if p[:2] != c0[14:16]:
+    return False, "Cmd38 counter 0x%s differs from Cmd0 counter 0x%s" % (p[:2].hex(), c0[14:16].hex())
+  return True, ""
+
+
+def _chk_cmd6_counter(parsed, saved):
+  """WARNING only (spec expectation not verified): Cmd6 should change the configuration counter."""
+  ref, p = saved.get("cnt6"), _payload(parsed)
+  if ref is None or len(ref) < 16 or len(p) < 16:
+    return True, "Counter before Cmd6 not saved - check skipped"
+  if p[14:16] == ref[14:16]:
+    return True, ("Warning: Cmd6 changed the polling address but the configuration change counter "
+                  "stayed at 0x%s - verify against the HART spec" % p[14:16].hex())
+  return True, ""
+
+
+def _attach(S, label, **kw):
+  """Add keys to the step whose label starts with `label`."""
+  for st in S:
+    if st["label"].startswith(label):
+      st.update(kw)
+      return
+  raise KeyError(label)
+
+
 def _ual_steps():
   S = []
   # ---- Setup (needed so long-address, Cmd11 and Cmd21 steps can match) ----
@@ -281,6 +403,28 @@ def _ual_steps():
     _s("[Restore] Cmd0 - final check", 0, pre=0.5,
        note="Device should answer at its original polling address."),
   ]
+  # ---- Response content checks (pass/fail) ----
+  i = next(k for k, st in enumerate(S) if st["label"].startswith("[3.3 UAL003] Cmd6 - write poll addr"))
+  S.insert(i, _s("[3.3 UAL003] Cmd0 - config counter (before Cmd6)", 0, long=True, _save="cnt6",
+                 note="Saves the configuration change counter to see whether Cmd6 changes it."))
+  _attach(S, "[3.2 UAL001] Cmd1 - PV (short)", _save="pv")
+  _attach(S, "[3.3 UAL003] Cmd0 short @ new addr", check=_chk_cmd6_counter)
+  _attach(S, "[3.4 UAL004] Cmd11 - matching tag", _save="id11", check=_chk_cmd0_len)
+  _attach(S, "[3.4 UAL004] Cmd0 - compare with Cmd11", check=_chk_same_id("id11"))
+  _attach(S, "[3.7 UAL007] Cmd15 - output info", check=_chk_range_units)
+  _attach(S, "[3.11 UAL011] Cmd9 - slots 0..3", check=_chk_cmd9([0, 1, 2, 3]))
+  _attach(S, "[3.11 UAL011] Cmd9 - dynamic vars", check=_chk_cmd9([246, 247, 248, 249]))
+  _attach(S, "[3.11 UAL011] Cmd9 - single var", check=_chk_cmd9([0]))
+  _attach(S, "[3.11 UAL011] Cmd9 (long)", check=_chk_cmd9([0, 1, 2, 3]))
+  _attach(S, "[3.12 UAL012] Cmd8 - dynamic variable classification", check=_chk_cmd8)
+  _attach(S, "[3.12 UAL012] Cmd8 (long)", check=_chk_cmd8)
+  _attach(S, "[3.14 UAL014] Cmd0 (short)", _save="id0", check=_chk_cmd0_len)
+  _attach(S, "[3.14 UAL014] Cmd0 (long)", check=_all(_chk_cmd0_len, _chk_same_id("id0")))
+  _attach(S, "[3.14 UAL014] Cmd0 (secondary master)", check=_all(_chk_cmd0_len, _chk_same_id("id0")))
+  _attach(S, "[3.15 UAL015] Cmd21 - matching long tag", _save="id21", check=_chk_cmd0_len)
+  _attach(S, "[3.15 UAL015] Cmd0 - compare with Cmd21", check=_chk_same_id("id21"))
+  _attach(S, "[3.16 UAL038] Cmd0 - config-changed bit (before)", _save="c0")
+  _attach(S, "[3.16 UAL038] Cmd38 - reset configuration changed flag", check=_chk_cmd38_counter)
   return S
 
 
@@ -777,6 +921,8 @@ SCENARIOS = {
       "UAL005 Cmd12/17 | UAL006 Cmd13/18 | UAL007 Cmd14/15 | UAL008 Cmd16/19\n"
       "UAL009 write protect | UAL010 cold start | UAL011 Cmd9 | UAL012 Cmd8\n"
       "UAL013 Cmd20/22 | UAL014 Cmd0 | UAL015 Cmd21 | UAL038 Cmd38 | UAL048 Cmd48\n"
+      "Checked: UAL000 RC!=64, UAL009 RC vs write-protect, Cmd0/11/21 length+identity,\n"
+      "Cmd9 layout, Cmd8 codes, Cmd15 vs Cmd1 units, Cmd38 counter (Cmd6 counter = warning).\n"
       "WRITES to device, then restores the original tag, descriptor, date, message,\n"
       "assembly no., long tag and polling addr (saved in setup). Power-cycle DUT\n"
       "before the run for UAL010. Poll addr in UI must be the device's current addr."

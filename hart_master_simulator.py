@@ -240,18 +240,23 @@ def parse_response(raw: bytes) -> dict | None:
 
 
 def check_rc(step: dict, parsed: dict, saved: dict | None = None) -> tuple[bool, str]:
-  """Evaluate optional response-code expectations of a scenario step.
+  """Evaluate optional response expectations of a scenario step.
 
   Step keys:
     expect_rc  int | list[int] | callable(saved) -> (list[int] | None, info_str)
                response code must be one of these (callable decides at run time
                from values saved by earlier steps; None = do not check)
     reject_rc  int | list[int]   response code must NOT be one of these
-  Returns (ok, message). message is a failure reason, or an info text when ok.
+    check      callable(parsed, saved) -> (ok, message)   content check of the
+               response (parsed["payload"] excludes the two status bytes).
+               If no expect_rc is given, RC 0 is required first.
+  Returns (ok, message). message is a failure reason, or an info/warning text
+  when ok.
   """
   expect = step.get("expect_rc")
   reject = step.get("reject_rc")
-  if expect is None and reject is None:
+  check = step.get("check")
+  if expect is None and reject is None and check is None:
     return True, ""
   info = ""
   if callable(expect):
@@ -260,6 +265,8 @@ def check_rc(step: dict, parsed: dict, saved: dict | None = None) -> tuple[bool,
     expect = [expect]
   if isinstance(reject, int):
     reject = [reject]
+  if check is not None and expect is None:
+    expect = [0]
   st1 = parsed.get("st1", 0)
   if st1 & 0x80:
     return False, f"Communication error in response (st1=0x{st1:02X}) - response code cannot be evaluated"
@@ -268,6 +275,12 @@ def check_rc(step: dict, parsed: dict, saved: dict | None = None) -> tuple[bool,
     return False, f"{rc_txt} - must not be {sorted(reject)}"
   if expect is not None and st1 not in expect:
     return False, f"{rc_txt} - expected {sorted(expect)}"
+  if check is not None:
+    ok, msg = check(parsed, saved or {})
+    if not ok:
+      return False, msg
+    if msg:
+      info = (info + " " + msg).strip()
   return True, info
 
 
@@ -278,6 +291,8 @@ def decode_cmd0(payload: bytes) -> dict:
   payload_len = len(payload)
   if payload_len < 11:
     return {"error": f"Invalid payload length: {payload_len} bytes. Too short."}
+
+  extra = {}   # additional decoded fields / conformance remarks
 
   # HART 7 Extended Format Verification
   if payload[0] == 254:
@@ -299,6 +314,14 @@ def decode_cmd0(payload: bytes) -> dict:
     cfg_count = ((payload[14] << 8) | payload[15]) if payload_len > 15 else None
     ext_status = payload[16] if payload_len > 16 else None
     fmt = f"HART 7 (Extended, {payload_len}B)"
+    if payload_len >= 22:
+      extra["Expanded manufacturer ID"] = f"0x{(payload[17] << 8) | payload[18]:04X}"
+      extra["Private label distributor"] = f"0x{(payload[19] << 8) | payload[20]:04X}"
+      extra["Device profile"] = f"{payload[21]}"
+    else:
+      extra["Conformance"] = (
+        f"HART 7 Cmd0 data is {payload_len} bytes, expected 22: manufacturer ID, "
+        f"private-label distributor code and device profile are MISSING")
 
   # HART 5/6 Legacy Format Verification
   else:
@@ -342,7 +365,7 @@ def decode_cmd0(payload: bytes) -> dict:
     ext_status = None
     fmt = "HART 5 (Legacy)"
 
-  return {
+  result = {
     "Protocol Format": fmt,
     "Manufacturer ID": f"0x{mfr_id:02X}",
     "Device type code": f"0x{dev_type:02X}",
@@ -357,6 +380,8 @@ def decode_cmd0(payload: bytes) -> dict:
     "Extended Device Status": f"0x{ext_status:02X}" if ext_status is not None else None,
     "_unique_id": bytes([mfr_id & 0x3F, dev_type]) + bytes(dev_id),
   }
+  result.update(extra)
+  return result
 
 
 def decode_cmd1(payload: bytes) -> dict:
@@ -2098,7 +2123,7 @@ class HartMasterSim(QMainWindow):
         result_color = "#4ade80"
       else:
         if rc_msg:
-          result_text = "✗ RC MISMATCH"
+          result_text = "✗ CHECK FAILED"
         else:
           result_text = "✓ OK" if ok else ("✗ NO RESPONSE" if not rx else "✗ PARSE ERR")
         result_color = "#4ade80" if ok else "#f87171"
