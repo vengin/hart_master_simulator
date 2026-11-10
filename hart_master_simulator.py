@@ -868,15 +868,34 @@ class ScenarioRunner(QThread):
 
     self.scenario_done.emit(ok_count, fail_count)
 
+class ScenarioTableWidget(QTableWidget):
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
+    self._last_w = 0
+    self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+  def showEvent(self, event):
+    super().showEvent(event)
+    self._last_w = self.viewport().width()
+
+  def resizeEvent(self, event):
+    super().resizeEvent(event)
+    vw = self.viewport().width()
+    if self._last_w > 0 and vw != self._last_w:
+      delta = vw - self._last_w
+      w1 = self.columnWidth(1) + delta
+      self.setColumnWidth(1, max(w1, 100))
+    self._last_w = vw
+
 
 # --- MAIN WINDOW ------------------------------------------------------------
 
 class HartMasterSim(QMainWindow):
   def __init__(self):
     super().__init__()
-    self.setWindowTitle("HART Master Simulator  v1.0")
+    self.setWindowTitle("HART Master Simulator  v1.1.3")
     self.setMinimumSize(1400, 750)
-    self.resize(1400, 860)
+    self.resize(1482, 860)
 
     self._worker = HartWorker()
     self._worker.frame_logged.connect(self._on_frame_logged)
@@ -1758,6 +1777,7 @@ class HartMasterSim(QMainWindow):
     self._cb_scenario.setMinimumWidth(340)
     for name in SCENARIOS:
       self._cb_scenario.addItem(name)
+    self._cb_scenario.setMaxVisibleItems(len(SCENARIOS))
     self._cb_scenario.currentIndexChanged.connect(self._on_scenario_changed)
     sel_row.addWidget(self._cb_scenario, 1)
     layout.addLayout(sel_row)
@@ -1770,17 +1790,29 @@ class HartMasterSim(QMainWindow):
       "QTextEdit { background: #0f172a; color: #f1f5f9; font-size: 11px; border: 1px solid #334155; }")
     layout.addWidget(self._lbl_scenario_desc)
 
+    # Vertical splitter for table and hints box
+    splitter = QSplitter(Qt.Vertical)
+    layout.addWidget(splitter)
+
+    # Upper container (table, progress, summary, buttons, rand_row)
+    upper_w = QWidget()
+    upper_layout = QVBoxLayout(upper_w)
+    upper_layout.setContentsMargins(0, 0, 0, 0)
+    upper_layout.setSpacing(6)
+
     # Step table
-    self._scenario_table = QTableWidget(0, 4)
+    self._scenario_table = ScenarioTableWidget(0, 4)
     self._scenario_table.setHorizontalHeaderLabels(["#", "Label", "Result", "Latency"])
-    self._scenario_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-    self._scenario_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-    self._scenario_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-    self._scenario_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+    header = self._scenario_table.horizontalHeader()
+    header.setSectionResizeMode(QHeaderView.Interactive)
+    self._scenario_table.setColumnWidth(0, 45)
+    self._scenario_table.setColumnWidth(1, 840)
+    self._scenario_table.setColumnWidth(2, 160)
+    self._scenario_table.setColumnWidth(3, 90)
     self._scenario_table.verticalHeader().setVisible(False)
     self._scenario_table.setEditTriggers(QTableWidget.NoEditTriggers)
     self._scenario_table.setAlternatingRowColors(True)
-    layout.addWidget(self._scenario_table)
+    upper_layout.addWidget(self._scenario_table)
 
     # Progress bar
     self._scenario_progress = QProgressBar()
@@ -1788,14 +1820,14 @@ class HartMasterSim(QMainWindow):
     self._scenario_progress.setTextVisible(True)
     self._scenario_progress.setStyleSheet(
       "QProgressBar { border: 1px solid #334155; background: #0f172a; color: #f1f5f9; height: 16px; }"
-      "QProgressBar::chunk { background: #2563eb; }"
+      "QProgressBar::chunk { background: #8D49B2; }"
     )
-    layout.addWidget(self._scenario_progress)
+    upper_layout.addWidget(self._scenario_progress)
 
     # Summary label
     self._lbl_scenario_summary = QLabel("Ready")
     self._lbl_scenario_summary.setAlignment(Qt.AlignCenter)
-    layout.addWidget(self._lbl_scenario_summary)
+    upper_layout.addWidget(self._lbl_scenario_summary)
 
     # Buttons
     btn_row = QHBoxLayout()
@@ -1815,11 +1847,11 @@ class HartMasterSim(QMainWindow):
     self._btn_scenario_abort.clicked.connect(self._abort_scenario)
     btn_row.addWidget(self._btn_scenario_abort)
 
-    layout.addLayout(btn_row)
+    upper_layout.addLayout(btn_row)
 
     # Random order option + run-all progress label
     rand_row = QHBoxLayout()
-    self._chk_random_order = QCheckBox("Random order (seed from time)")
+    self._chk_random_order = QCheckBox("Random order")
     self._chk_random_order.setToolTip(
       "Shuffle scenario order using a time-based seed.\n"
       "Each Run All session uses a different shuffle.")
@@ -1828,19 +1860,23 @@ class HartMasterSim(QMainWindow):
     self._lbl_run_all_progress = QLabel("")
     self._lbl_run_all_progress.setObjectName("val")
     rand_row.addWidget(self._lbl_run_all_progress)
-    layout.addLayout(rand_row)
+    upper_layout.addLayout(rand_row)
+
+    splitter.addWidget(upper_w)
 
     # Diagnostic hints box
     self._scenario_hints = QTextEdit()
     self._scenario_hints.setReadOnly(True)
-    self._scenario_hints.setMaximumHeight(120)
     self._scenario_hints.setStyleSheet(
       "QTextEdit { background: #0f172a; color: #ffff00; font-size: 11px; border: 1px solid #334155; }")
     palette = self._scenario_hints.palette()
     palette.setColor(QPalette.PlaceholderText, QColor("#d0d064"))
     self._scenario_hints.setPalette(palette)
     self._scenario_hints.setPlaceholderText("Diagnostic hints will appear here as steps run…")
-    layout.addWidget(self._scenario_hints)
+    splitter.addWidget(self._scenario_hints)
+
+    splitter.setStretchFactor(0, 1)
+    splitter.setStretchFactor(1, 0)
 
     # Init description
     self._on_scenario_changed(0)
@@ -2171,7 +2207,7 @@ class HartMasterSim(QMainWindow):
     self._btn_scenario_run_all.setEnabled(True)
     self._btn_scenario_abort.setEnabled(False)
     total = ok_count + fail_count
-    summary = f"Done: {ok_count}/{total} OK  {fail_count} failed"
+    summary = f"Done: {ok_count}/{total} OK, {fail_count} failed"
     self._lbl_scenario_summary.setText(summary)
     color = "#4ade80" if fail_count == 0 else ("#fbbf24" if ok_count > 0 else "#f87171")
     self._lbl_scenario_summary.setStyleSheet(f"color: {color}; font-weight: bold;")
