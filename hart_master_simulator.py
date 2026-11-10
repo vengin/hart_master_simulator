@@ -948,10 +948,10 @@ class HartMasterSim(QMainWindow):
 
     self._tabs = QTabWidget()
     self._tabs.addTab(self._build_log_tab(), "Frame Log")
+    self._tabs.addTab(self._build_scenarios_tab(), "Scenarios")
     self._tabs.addTab(self._build_decode_tab(), "Decoded Response")
     self._tabs.addTab(self._build_custom_tab(), "Custom Frame")
     self._tabs.addTab(self._build_timing_tab(), "Timing / Stats")
-    self._tabs.addTab(self._build_scenarios_tab(), "Scenarios")
     self._tabs.setUsesScrollButtons(True)
     right_layout.addWidget(self._tabs)
     splitter.addWidget(right)
