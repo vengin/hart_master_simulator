@@ -465,7 +465,7 @@ def decode_cmd14(payload: bytes) -> dict:
 
 def decode_cmd20(payload: bytes) -> dict:
   if len(payload) != 32:
-    return {"error": f"Invalid payload length for Cmd 20: {len(payload)} bytes (need 32)"}
+    return {"error": f"Invalid payload length for Cmd20: {len(payload)} bytes (need 32)"}
 
   try:
     long_tag = payload.decode('latin-1').strip()
@@ -1055,20 +1055,20 @@ class HartMasterSim(QMainWindow):
     layout.setSpacing(3)
 
     commands = [
-      (0, "Cmd 0 - Read Unique Identifier"),
-      (1, "Cmd 1 - Read Primary Variable"),
-      (2, "Cmd 2 - Read Loop Current + %"),
-      (3, "Cmd 3 - Read Dynamic Variables"),
-      (6, "Cmd 6 - Write Polling Address"),
-      (11, "Cmd 11 - Read Unique ID by Tag"),
-      (12, "Cmd 12 - Read Message"),
-      (13, "Cmd 13 - Read Tag/Descriptor/Date"),
-      (14, "Cmd 14 - Read PV Info"),
-      (15, "Cmd 15 - Read Output Info"),
-      (16, "Cmd 16 - Read Final Assembly"),
-      (20, "Cmd 20 - Read Long Tag"),
-      (48, "Cmd 48 - Read Additional Status"),
-      (54, "Cmd 54 - Read Device Variable Info"),
+      (0, "Cmd0 - Read Unique Identifier"),
+      (1, "Cmd1 - Read Primary Variable"),
+      (2, "Cmd2 - Read Loop Current + %"),
+      (3, "Cmd3 - Read Dynamic Variables"),
+      (6, "Cmd6 - Write Polling Address"),
+      (11, "Cmd11 - Read Unique ID by Tag"),
+      (12, "Cmd12 - Read Message"),
+      (13, "Cmd13 - Read Tag/Descriptor/Date"),
+      (14, "Cmd14 - Read PV Info"),
+      (15, "Cmd15 - Read Output Info"),
+      (16, "Cmd16 - Read Final Assembly"),
+      (20, "Cmd20 - Read Long Tag"),
+      (48, "Cmd48 - Read Additional Status"),
+      (54, "Cmd54 - Read Device Variable Info"),
     ]
 
     for cmd_num, label in commands:
@@ -1108,17 +1108,17 @@ class HartMasterSim(QMainWindow):
       self._worker.queue_command(
         0, 11, tag_data,
         use_long=True, unique_id=self._unique_id,
-        label="Cmd 11 - Read Unique ID by Tag"
+        label="Cmd11 - Read Unique ID by Tag"
       )
     else:
       self._worker.queue_command(
         0, 11, tag_data,
         use_long=False, unique_id=None,
-        label="Cmd 11 - Read Unique ID by Tag (broadcast)"
+        label="Cmd11 - Read Unique ID by Tag (broadcast)"
       )
     encoded_hex = " ".join(f"{b:02X}" for b in tag_data)
     self._log_info(
-      f"  Cmd 11: tag={repr(tag_str.upper().ljust(8)[:8])}  "
+      f"  Cmd11: tag={repr(tag_str.upper().ljust(8)[:8])}  "
       f"packed={encoded_hex}  "
       f"frame={'long' if self._unique_id else 'broadcast short'}"
     )
@@ -1128,7 +1128,7 @@ class HartMasterSim(QMainWindow):
     # Set Device Variable Code as PV_CODE = 246 by default
     dv_code, ok = QInputDialog.getInt(self, "Command 54", "Enter Device Variable Code (0-255):", 246, 0, 255, 1)
     if ok:
-      self._send_command(54, bytes([dv_code]), "Cmd 54 - Read Device Variable Info")
+      self._send_command(54, bytes([dv_code]), "Cmd54 - Read Device Variable Info")
 
   def _build_autopoll_panel(self):
     grp = QGroupBox("AUTO-POLL")
