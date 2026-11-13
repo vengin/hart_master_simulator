@@ -101,7 +101,8 @@ _WR_MSG_DATA = _pack_ascii(UAL_MESSAGE, 32)                         # 24 bytes
 def _wp_expect(show_info=False):
   """expect_rc callable for UAL009 write attempts: decided from the write-protect
   code saved from Cmd15 (data byte 15): 1 -> writes must return RC 7,
-  0 / 250 -> writes must succeed (RC 0)."""
+  0 / 250 / 251 -> writes must succeed (RC 0). Common Table 7: 0 = No,
+  1 = Yes, 250 = Not Used, 251 = None (device has no write protection)."""
   def fn(saved):
     p = saved.get("wp")
     if p is None or len(p) < 16:
@@ -109,7 +110,7 @@ def _wp_expect(show_info=False):
     code = p[15]
     if code == 1:
       return [7], ""
-    if code in (0, 250):
+    if code in (0, 250, 251):
       return [0], ("Write protect is OFF (code %d) - writes succeeded; RC 7 behaviour "
                    "NOT tested. Enable write protect and rerun." % code) if show_info else ""
     return None, "Unexpected write-protect code %d - RC not checked" % code
@@ -461,10 +462,13 @@ def _ual_steps():
   _attach(S, "[3.4 UAL004] Cmd11 - matching tag", _save="id11", check=_chk_cmd0_len)
   _attach(S, "[3.4 UAL004] Cmd0 - compare with Cmd11", check=_chk_same_id("id11"))
   _attach(S, "[3.7 UAL007] Cmd15 - output info", check=_chk_range_units)
-  _attach(S, "[3.11 UAL011] Cmd9 - slots 0..3", check=_chk_cmd9([0, 1, 2, 3]))
-  _attach(S, "[3.11 UAL011] Cmd9 - dynamic vars", check=_chk_cmd9([246, 247, 248, 249]))
-  _attach(S, "[3.11 UAL011] Cmd9 - single var", check=_chk_cmd9([0]))
-  _attach(S, "[3.11 UAL011] Cmd9 (long)", check=_chk_cmd9([0, 1, 2, 3]))
+  # Cmd9 RC 14 = Warning "Dynamic Variables Returned for Device Variables":
+  # the full response is still returned (device maps codes 0-3 to PV..QV)
+  CMD9_RC = [0, 14]
+  _attach(S, "[3.11 UAL011] Cmd9 - slots 0..3", expect_rc=CMD9_RC, check=_chk_cmd9([0, 1, 2, 3]))
+  _attach(S, "[3.11 UAL011] Cmd9 - dynamic vars", expect_rc=CMD9_RC, check=_chk_cmd9([246, 247, 248, 249]))
+  _attach(S, "[3.11 UAL011] Cmd9 - single var", expect_rc=CMD9_RC, check=_chk_cmd9([0]))
+  _attach(S, "[3.11 UAL011] Cmd9 (long)", expect_rc=CMD9_RC, check=_chk_cmd9([0, 1, 2, 3]))
   _attach(S, "[3.12 UAL012] Cmd8 - dynamic variable classification", check=_chk_cmd8)
   _attach(S, "[3.12 UAL012] Cmd8 (long)", check=_chk_cmd8)
   _attach(S, "[3.14 UAL014] Cmd0 (short)", _save="id0", check=_chk_cmd0_len)

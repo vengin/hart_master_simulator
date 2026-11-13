@@ -256,11 +256,14 @@ class FakeSlave:
       for code in data:
         slot = bytes([code, 0, PV_UNITS]) + _f(PV_VALUE) + bytes([0xC0])
         out += slot[:slot_len]
-      return 0, out + bytes(4)                 # + timestamp
+      # Like the BUOS firmware: Device Variable codes are answered with the
+      # Dynamic Variables -> RC 14 warning (data still complete)
+      rc = 0 if all(c >= 246 for c in data) else 14
+      return rc, out + bytes(4)                # + timestamp
     if cmd == 14:
       return 0, bytes([0, 0, 0, PV_UNITS]) + _f(30000.0) + _f(0.0) + _f(1.0)
     if cmd == 15:
-      wp = 1 if self.write_protect else 0
+      wp = 1 if self.write_protect else 251    # 251 = None, as the BUOS firmware reports
       return 0, bytes([0, 0, PV_UNITS]) + _f(30000.0) + _f(0.0) + _f(0.0) + bytes([wp, 250, 0])
     if cmd == 48:
       if "missing_cmd48" in self.faults:
