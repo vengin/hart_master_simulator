@@ -17,6 +17,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QMutex
 from PyQt5.QtGui import QFont, QColor, QPalette, QTextCursor, QFontDatabase
 
 from scenarios import SCENARIOS
+from hart_codec import encode_packed_ascii, decode_packed_ascii
 
 # --- HART PROTOCOL CONSTANTS ------------------------------------------------
 
@@ -25,13 +26,28 @@ HART_PARITY = serial.PARITY_ODD
 HART_STOPBITS = serial.STOPBITS_ONE
 HART_BYTESIZE = serial.EIGHTBITS
 
-# Delimiter bytes
-DELIM_SHORT_MASTER  = 0x02  # Short frame, primary master → slave
-DELIM_SHORT_SECOND  = 0x01  # Short frame, secondary master → slave
-DELIM_LONG_MASTER   = 0x82  # Long frame, primary master → slave
-DELIM_LONG_SECOND   = 0x81  # Long frame, secondary master → slave
-DELIM_SHORT_SLAVE   = 0x06  # Short frame, slave → master
-DELIM_LONG_SLAVE    = 0x86  # Long frame, slave → master
+# Delimiter byte: bit 7 = long (unique-ID) address, bits 6-5 = number of
+# expansion bytes, bits 2-0 = frame type. Primary vs secondary master is NOT
+# in the delimiter: it is bit 7 of the (first) address byte.
+FRAME_BACK = 0x01           # burst frame, slave -> masters
+FRAME_STX  = 0x02           # master -> slave request (primary AND secondary)
+FRAME_ACK  = 0x06           # slave -> master response
+DELIM_LONG_BIT = 0x80
+DELIM_SHORT_STX = FRAME_STX                    # 0x02
+DELIM_LONG_STX  = DELIM_LONG_BIT | FRAME_STX   # 0x82
+DELIM_SHORT_ACK = FRAME_ACK                    # 0x06
+DELIM_LONG_ACK  = DELIM_LONG_BIT | FRAME_ACK   # 0x86
+
+# Address byte 0 flags
+ADDR_PRIMARY_MASTER_BIT = 0x80  # 1 = primary master, 0 = secondary master
+ADDR_BURST_BIT          = 0x40  # set by a slave in burst mode (responses only)
+ADDR_MASK               = 0x3F  # short polling address 0-63 / 6 LSBs of long addr
+
+# Long frame Broadcast Address (38 zero bits): only C11/C21 may use it
+BROADCAST_UNIQUE_ID = bytes(5)
+
+# Wire time per character: 1 start + 8 data + 1 parity + 1 stop (8O1)
+HART_BITS_PER_CHAR = 11
 
 UNIT_CODES = {
   # Pressure
@@ -58,12 +74,12 @@ UNIT_CODES = {
   # variable classification, Common Table 21) and are not decoded here.
 }
 
+# Response code byte with bit 7 set = communication error summary
 COMM_STATUS_BITS = {
-  0x80: "Framing error",
   0x40: "Vertical parity error",
   0x20: "Overrun error",
-  0x10: "Longitudinal parity error",
-  0x08: "Reserved",
+  0x10: "Framing error",
+  0x08: "Longitudinal parity error",
   0x04: "Reserved",
   0x02: "Buffer overflow",
   0x01: "Reserved",
@@ -107,6 +123,12 @@ RESPONSE_CODES = {
   64: "Command not implemented",
 }
 
+# HART 7: 16-bit Manufacturer ID (C0 bytes 17-18)
+KNOWN_MANUFACTURERS_16 = {
+  0x61F6: "Ectron",
+}
+
+# HART 5: 8-bit Manufacturer ID (legacy C0 byte 1)
 KNOWN_MANUFACTURERS = {
   0x00: "Unknown",
   0x01: "Emerson/Fisher/Rosemount",
@@ -133,12 +155,17 @@ def calc_checksum(data: bytes) -> int:
   return cs
 
 
+def _master_bit(master_type: str) -> int:
+  return ADDR_PRIMARY_MASTER_BIT if master_type == "primary" else 0x00
+
+
 def build_short_frame(address: int, command: int, data: bytes = b"",
                       preamble_count: int = 5,
                       master_type: str = "primary") -> bytes:
-  delim = DELIM_SHORT_MASTER if master_type == "primary" else DELIM_SHORT_SECOND
-  addr_byte = address & 0x3F
-  frame_body = bytes([delim, addr_byte, command, len(data)]) + data
+  """STX request with a short (polling) address. The master type is bit 7 of
+  the address byte (1 = primary, 0 = secondary); the delimiter is 0x02 for both."""
+  addr_byte = _master_bit(master_type) | (address & ADDR_MASK)
+  frame_body = bytes([DELIM_SHORT_STX, addr_byte, command, len(data)]) + data
   cs = calc_checksum(frame_body)
   return bytes([0xFF] * preamble_count) + frame_body + bytes([cs])
 
@@ -146,70 +173,91 @@ def build_short_frame(address: int, command: int, data: bytes = b"",
 def build_long_frame(unique_id: bytes, command: int, data: bytes = b"",
                      preamble_count: int = 5,
                      master_type: str = "primary") -> bytes:
-  """unique_id: 5 bytes (manufacturer[1] + devtype[1] + devid[3])"""
-  delim = DELIM_LONG_MASTER if master_type == "primary" else DELIM_LONG_SECOND
-  # Long address: bit7 = master type (1 = primary), bit6 = burst flag (0 in a
-  # master request), bits5-0 = upper 6 bits of the expanded device type.
-  first = (unique_id[0] & 0x3F) | (0x80 if master_type == "primary" else 0x00)
-  addr_bytes = bytes([first]) + unique_id[1:5]
-  frame_body = bytes([delim]) + addr_bytes + bytes([command, len(data)]) + data
+  """STX request with a long (unique-ID) address.
+  unique_id: 5 bytes = HART 7 Expanded Device Type (6 LSBs of MSB, LSB) +
+  Device ID[3]; all zeros = Broadcast Address. Byte 0 bit 7 = primary master,
+  bit 6 (burst) is always 0 in a master request."""
+  addr_bytes = bytes([_master_bit(master_type) | (unique_id[0] & ADDR_MASK)]) + bytes(unique_id[1:5])
+  frame_body = bytes([DELIM_LONG_STX]) + addr_bytes + bytes([command, len(data)]) + data
   cs = calc_checksum(frame_body)
   return bytes([0xFF] * preamble_count) + frame_body + bytes([cs])
+
+
+def _find_frame_start(raw: bytes) -> tuple[int, int]:
+  """Return (delimiter index, preamble count) of the first slave frame (ACK or
+  BACK) that follows at least 2 preambles. A half-duplex modem may echo our own
+  STX request first; that echo is skipped. Falls back to the first non-preamble
+  byte (old behaviour) if no ACK/BACK frame is found."""
+  first = None
+  i = 0
+  while i < len(raw):
+    if raw[i] != 0xFF:
+      i += 1
+      continue
+    j = i
+    while j < len(raw) and raw[j] == 0xFF:
+      j += 1
+    if j >= len(raw):
+      break
+    if first is None:
+      first = (j, j - i)
+    if (j - i) >= 2 and (raw[j] & 0x07) in (FRAME_ACK, FRAME_BACK):
+      return j, j - i
+    i = j + 1
+  if first is not None:
+    return first
+  # No 0xFF run at all (e.g. the modem dropped every preamble): fall back to
+  # the first non-preamble byte, as the old parser did
+  k = 0
+  while k < len(raw) and raw[k] == 0xFF:
+    k += 1
+  return k, k
 
 
 def parse_response(raw: bytes) -> dict | None:
   if not raw:
     return None
 
-  # Skip preambles
-  i = 0
-  while i < len(raw) and raw[i] == 0xFF:
-    i += 1
-
-  preamble_count = i
+  i, preamble_count = _find_frame_start(raw)
 
   if i >= len(raw):
     return {"error": "Only preamble bytes received", "preamble_count": preamble_count}
 
   delimiter = raw[i]
-  is_long = (delimiter & 0x80) != 0
-  is_burst = (delimiter & 0x40) != 0
+  is_long = (delimiter & DELIM_LONG_BIT) != 0
+  frame_type = delimiter & 0x07
+  n_expansion = (delimiter >> 5) & 0x03
 
   try:
-    if is_long:
-      if i + 8 > len(raw):
-        return {"error": "Frame too short (long addr)", "raw": raw}
-      addr = raw[i+1:i+6]
-      cmd = raw[i+6]
-      byte_count = raw[i+7]
-      frame_start = i
-      data_start = i + 8
-    else:
-      if i + 4 > len(raw):
-        return {"error": "Frame too short (short addr)", "raw": raw}
-      addr = raw[i+1:i+2]
-      cmd = raw[i+2]
-      byte_count = raw[i+3]
-      frame_start = i
-      data_start = i + 4
+    addr_len = 5 if is_long else 1
+    addr_start = i + 1
+    cmd_pos = addr_start + addr_len + n_expansion
+    if cmd_pos + 1 >= len(raw):
+      return {"error": "Frame too short (%s addr)" % ("long" if is_long else "short"), "raw": raw}
+    addr = raw[addr_start:addr_start + addr_len]
+    cmd = raw[cmd_pos]
+    byte_count = raw[cmd_pos + 1]
+    frame_start = i
+    data_start = cmd_pos + 2
 
-    expected_len = data_start + byte_count + 1  # +1 for checksum
     actual_payload = raw[data_start:data_start + byte_count]
     checksum_byte = raw[data_start + byte_count] if data_start + byte_count < len(raw) else None
 
-    # Verify checksum
+    # Verify checksum (delimiter .. last data byte)
     frame_for_cs = raw[frame_start:data_start + byte_count]
     expected_cs = calc_checksum(frame_for_cs)
     cs_ok = (checksum_byte == expected_cs) if checksum_byte is not None else False
+    complete = len(actual_payload) == byte_count
 
     # Status bytes
     st1 = actual_payload[0] if len(actual_payload) > 0 else 0
     st2 = actual_payload[1] if len(actual_payload) > 1 else 0
     payload = actual_payload[2:] if len(actual_payload) > 2 else b""
 
-    # Decode comm status vs response code
-    if st1 & 0x80:
-      comm_errors = [desc for bit, desc in COMM_STATUS_BITS.items() if st1 & bit and bit != 0x80]
+    # Response code byte: bit 7 set = communication error summary
+    comm_error = (st1 & 0x80) != 0
+    if comm_error:
+      comm_errors = [desc for bit, desc in COMM_STATUS_BITS.items() if st1 & bit]
       status_text = "COMM ERROR: " + (", ".join(comm_errors) if comm_errors else "unknown")
     else:
       status_text = RESPONSE_CODES.get(st1, f"Response code {st1}")
@@ -219,13 +267,18 @@ def parse_response(raw: bytes) -> dict | None:
     return {
       "ok": True,
       "delimiter": delimiter,
+      "frame_type": frame_type,
+      "is_ack": frame_type == FRAME_ACK,
       "is_long": is_long,
-      "is_burst": is_burst,
+      "is_burst": bool(addr and (addr[0] & ADDR_BURST_BIT)),
+      "is_primary": bool(addr and (addr[0] & ADDR_PRIMARY_MASTER_BIT)),
       "address": addr,
       "cmd": cmd,
       "byte_count": byte_count,
+      "complete": complete,
       "st1": st1,
       "st2": st2,
+      "comm_error": comm_error,
       "status_text": status_text,
       "dev_flags": dev_flags,
       "payload": payload,
@@ -239,146 +292,136 @@ def parse_response(raw: bytes) -> dict | None:
     return {"error": str(e), "raw": raw}
 
 
-def check_rc(step: dict, parsed: dict, saved: dict | None = None) -> tuple[bool, str]:
-  """Evaluate optional response expectations of a scenario step.
+def extract_reply(raw: bytes, request: bytes) -> bytes:
+  """Return the slave's part of `raw`. A half-duplex modem may echo our own
+  request on RX (possibly with a different number of preambles); a leading
+  echo is removed. Returns b"" if nothing but the echo / preambles arrived."""
+  if not raw:
+    return b""
+  body = request.lstrip(b"\xff")
+  k = raw.find(body) if body else -1
+  if k >= 0 and not raw[:k].strip(b"\xff"):
+    raw = raw[k + len(body):]
+  return raw if raw.strip(b"\xff") else b""
 
-  Step keys:
-    expect_rc  int | list[int] | callable(saved) -> (list[int] | None, info_str)
-               response code must be one of these (callable decides at run time
-               from values saved by earlier steps; None = do not check)
-    reject_rc  int | list[int]   response code must NOT be one of these
-    check      callable(parsed, saved) -> (ok, message)   content check of the
-               response (parsed["payload"] excludes the two status bytes).
-               If no expect_rc is given, RC 0 is required first.
-  Returns (ok, message). message is a failure reason, or an info/warning text
-  when ok.
-  """
-  expect = step.get("expect_rc")
-  reject = step.get("reject_rc")
-  check = step.get("check")
-  if expect is None and reject is None and check is None:
-    return True, ""
-  info = ""
-  if callable(expect):
-    expect, info = expect(saved or {})
-  if isinstance(expect, int):
-    expect = [expect]
-  if isinstance(reject, int):
-    reject = [reject]
-  if check is not None and expect is None:
-    expect = [0]
-  st1 = parsed.get("st1", 0)
-  if st1 & 0x80:
-    return False, f"Communication error in response (st1=0x{st1:02X}) - response code cannot be evaluated"
-  rc_txt = f"RC={st1} ({RESPONSE_CODES.get(st1, 'unknown')})"
-  if reject and st1 in reject:
-    return False, f"{rc_txt} - must not be {sorted(reject)}"
-  if expect is not None and st1 not in expect:
-    return False, f"{rc_txt} - expected {sorted(expect)}"
-  if check is not None:
-    ok, msg = check(parsed, saved or {})
-    if not ok:
-      return False, msg
-    if msg:
-      info = (info + " " + msg).strip()
-  return True, info
+
+def hart_exchange(port, frame: bytes, timeout_s: float) -> tuple[bytes, float, bytes]:
+  """Send `frame`, collect the answer. Returns (reply, latency_ms, raw):
+  reply = slave bytes without any echo of the request (b"" = no response),
+  latency from end of our transmission to the first reply byte."""
+  port.reset_input_buffer()
+  port.write(frame)
+  port.flush()
+
+  # Wait for last TX byte to leave the wire, then start latency clock.
+  tx_duration_s = len(frame) * HART_BITS_PER_CHAR / HART_BAUD
+  time.sleep(tx_duration_s)
+  t_tx_end = time.perf_counter()
+
+  raw = b""
+  arrivals = []                      # (offset in raw, arrival time) per chunk
+  deadline = t_tx_end + timeout_s
+  while time.perf_counter() < deadline:
+    waiting = port.in_waiting
+    if waiting:
+      chunk = port.read(waiting)
+      arrivals.append((len(raw), time.perf_counter()))
+      raw += chunk
+      time.sleep(0.02)
+    elif extract_reply(raw, frame):
+      time.sleep(0.05)
+      if not port.in_waiting:
+        break
+    else:
+      time.sleep(0.02)
+
+  reply = extract_reply(raw, frame)
+  if reply:
+    first = len(raw) - len(reply)
+    t_first = [t for off, t in arrivals if off <= first][-1]
+    latency_ms = (t_first - t_tx_end) * 1000.0
+  else:
+    latency_ms = (time.perf_counter() - t_tx_end) * 1000.0  # timeout, no response
+  return reply, latency_ms, raw
 
 
 # --- COMMAND DECODERS -------------------------------------------------------
 
-# Modified decode_cmd0 in hart_master_simulator.py for HART 7
+# HART 7 Command 0 (22 data bytes; see hart_spec c0_read_unique_identifier)
 def decode_cmd0(payload: bytes) -> dict:
   payload_len = len(payload)
   if payload_len < 11:
     return {"error": f"Invalid payload length: {payload_len} bytes. Too short."}
 
-  extra = {}   # additional decoded fields / conformance remarks
-
-  # HART 7 Extended Format Verification
+  # HART 6/7 expanded format: byte 0 = 254
   if payload[0] == 254:
-    if payload_len < 17:
-      return {"error": f"HART 7 format error: Minimum 17 bytes required, got {payload_len}"}
+    if payload_len < 12:
+      return {"error": f"Expanded format error: Minimum 12 bytes required, got {payload_len}"}
 
     hart_rev = payload[4]
-    if hart_rev < 7:
-      return {"error": f"HART 7 format error: Expansion code 254 present but HART Revision is {hart_rev}"}
-
-    mfr_id = payload[1]
-    dev_type = payload[2]
-    dev_rev = payload[5]
-    sw_rev = payload[6]
-    hw_rev = payload[7]
-    flags = payload[8]
+    exp_dev_type = (payload[1] << 8) | payload[2]
     dev_id = payload[9:12]
-    max_vars = payload[13] if payload_len > 13 else None
-    cfg_count = ((payload[14] << 8) | payload[15]) if payload_len > 15 else None
-    ext_status = payload[16] if payload_len > 16 else None
-    fmt = f"HART 7 (Extended, {payload_len}B)"
-    if payload_len >= 22:
-      extra["Expanded manufacturer ID"] = f"0x{(payload[17] << 8) | payload[18]:04X}"
-      extra["Private label distributor"] = f"0x{(payload[19] << 8) | payload[20]:04X}"
-      extra["Device profile"] = f"{payload[21]}"
-    else:
-      extra["Conformance"] = (
-        f"HART 7 Cmd0 data is {payload_len} bytes, expected 22: manufacturer ID, "
-        f"private-label distributor code and device profile are MISSING")
+    p = lambda n: payload[n] if payload_len > n else None
+    mfr = ((payload[17] << 8) | payload[18]) if payload_len > 18 else None
+    dist = ((payload[19] << 8) | payload[20]) if payload_len > 20 else None
+    result = {
+      "Protocol Format": f"HART {hart_rev} (Expanded, {payload_len}B)",
+      "Expanded Device Type": f"0x{exp_dev_type:04X}",
+      "Min preambles (request)": p(3),
+      "HART revision": hart_rev,
+      "Device revision": payload[5],
+      "Software revision": payload[6],
+      "Hardware revision": payload[7] >> 3,
+      "Physical signaling code": payload[7] & 0x07,
+      "Flags": f"0x{payload[8]:02X}",
+      "Device ID": f"{dev_id[0]:02X}:{dev_id[1]:02X}:{dev_id[2]:02X}",
+      "Response preambles": p(12),
+      "Last Device Variable code": p(13),
+      "Config Change Count": ((payload[14] << 8) | payload[15]) if payload_len > 15 else None,
+      "Extended Device Status": f"0x{payload[16]:02X}" if payload_len > 16 else None,
+      "Manufacturer ID": (f"0x{mfr:04X} ({KNOWN_MANUFACTURERS_16.get(mfr, 'unknown')})"
+                          if mfr is not None else None),
+      "Private Label Distributor": f"0x{dist:04X}" if dist is not None else None,
+      "Device Profile": p(21),
+      # HART 7 long address: 6 LSBs of Expanded Device Type MSB, its LSB, Device ID
+      "_unique_id": bytes([payload[1] & ADDR_MASK, payload[2]]) + bytes(dev_id),
+    }
+    if hart_rev >= 7 and payload_len < 22:
+      result["Warning"] = f"HART 7 Command 0 has 22 data bytes, got {payload_len}"
+    return result
 
-  # HART 5/6 Legacy Format Verification
-  else:
-    if payload_len < 12:
-      if payload_len == 11 and payload[3] <= 6:
-        mfr_id = payload[0]
-        dev_type = payload[1]
-        return {
-          "Protocol Format": "Non-standard HART 5 (Truncated)",
-          "Manufacturer ID": f"0x{mfr_id:02X}",
-          "Device type code": f"0x{dev_type:02X}",
-          "HART revision": payload[3],
-          "_unique_id": bytes([mfr_id & 0x3F, dev_type]) + payload[8:11]
-        }
-      return {"error": f"HART 5 format error: Expected 12 bytes, got {payload_len}"}
-
-    # HART 5/6 Cmd0 response is exactly 12 bytes; extra bytes without
-    # expansion code 0xFE at byte[0] means the frame is malformed.
-    if payload_len > 12:
+  # HART 5 format (12 data bytes): byte 0 = Manufacturer ID, byte 1 = Device Type
+  if payload_len < 12:
+    if payload_len == 11 and payload[3] <= 6:
+      mfr_id = payload[0]
+      dev_type = payload[1]
       return {
-        "error": (
-          f"HART 5 format error: byte[0]=0x{payload[0]:02X} is not expansion "
-          f"code 0xFE, but payload is {payload_len} bytes (expected 12). "
-          f"Possible wrong expansion byte or corrupted frame."
-        )
+        "Protocol Format": "Non-standard HART 5 (Truncated)",
+        "Manufacturer ID": f"0x{mfr_id:02X}",
+        "Device type code": f"0x{dev_type:02X}",
+        "HART revision": payload[3],
+        "_unique_id": bytes([mfr_id & ADDR_MASK, dev_type]) + payload[8:11]
       }
+    return {"error": f"HART 5 format error: Expected 12 bytes, got {payload_len}"}
 
-    hart_rev = payload[3]
-    if hart_rev > 6:
-      return {"error": f"HART 5 format error: Missing expansion code 254 but HART Revision is {hart_rev}"}
+  hart_rev = payload[3]
+  if hart_rev > 5:
+    return {"error": f"HART 5 format error: byte 0 is not 254 but HART Revision is {hart_rev}"}
 
-    mfr_id = payload[0]
-    dev_type = payload[1]
-    dev_rev = payload[4]
-    sw_rev = payload[5]
-    hw_rev = payload[6]
-    flags = payload[7]
-    dev_id = payload[8:11]
-    max_vars = None
-    cfg_count = None
-    ext_status = None
-    fmt = "HART 5 (Legacy)"
-
-  result = {
-    "Protocol Format": fmt,
-    "Manufacturer ID": f"0x{mfr_id:02X}",
+  mfr_id = payload[0]
+  dev_type = payload[1]
+  dev_id = payload[8:11]
+  return {
+    "Protocol Format": "HART 5 (Legacy)",
+    "Manufacturer ID": f"0x{mfr_id:02X} ({KNOWN_MANUFACTURERS.get(mfr_id, 'unknown')})",
     "Device type code": f"0x{dev_type:02X}",
     "HART revision": hart_rev,
-    "Device revision": dev_rev,
-    "Software revision": sw_rev,
-    "Hardware revision": hw_rev >> 3,
-    "Flags": f"0x{flags:02X}",
+    "Device revision": payload[4],
+    "Software revision": payload[5],
+    "Hardware revision": payload[6] >> 3,
+    "Flags": f"0x{payload[7]:02X}",
     "Device ID": f"{dev_id[0]:02X}:{dev_id[1]:02X}:{dev_id[2]:02X}",
-    "Max Device Variables": max_vars,
-    "Config Change Count": cfg_count,
-    "Extended Device Status": f"0x{ext_status:02X}" if ext_status is not None else None,
-    "_unique_id": bytes([mfr_id & 0x3F, dev_type]) + bytes(dev_id),
+    "_unique_id": bytes([mfr_id & ADDR_MASK, dev_type]) + bytes(dev_id),
   }
   result.update(extra)
   return result
@@ -424,6 +467,16 @@ def decode_cmd3(payload: bytes) -> dict:
   return result
 
 
+def decode_cmd6(payload: bytes) -> dict:
+  """C6 response / C7: polling address + loop current mode"""
+  if len(payload) < 2:
+    return {"error": f"Too short: {len(payload)} bytes (need 2)"}
+  return {
+    "Polling address": payload[0],
+    "Loop current mode": f"{payload[1]} ({'enabled' if payload[1] else 'disabled'})",
+  }
+
+
 def decode_cmd12(payload: bytes) -> dict:
   if len(payload) < 24:
     return {"error": f"Too short: {len(payload)} bytes"}
@@ -447,21 +500,28 @@ def decode_cmd13(payload: bytes) -> dict:
 
 
 def decode_cmd14(payload: bytes) -> dict:
-  # Sensor S/N (3) + limits/span units (1) + upper limit (4) + lower limit (4) + min span (4)
+  """C14: transducer serial[3], limits/min span units, upper, lower, min span"""
   if len(payload) < 16:
     return {"error": f"Too short: {len(payload)} bytes (need 16)"}
-  sn = (payload[0] << 16) | (payload[1] << 8) | payload[2]
+  serial_no = (payload[0] << 16) | (payload[1] << 8) | payload[2]
   units = payload[3]
   upper = struct.unpack(">f", payload[4:8])[0]
   lower = struct.unpack(">f", payload[8:12])[0]
   min_span = struct.unpack(">f", payload[12:16])[0]
   return {
-    "PV sensor serial number": f"{sn}",
-    "Limits/span units": f"{units} ({UNIT_CODES.get(units, 'unknown')})",
-    "Upper sensor limit": f"{upper:.4f}",
-    "Lower sensor limit": f"{lower:.4f}",
+    "PV transducer S/N": f"{serial_no}",
+    "Limits/min span units": f"{units} ({UNIT_CODES.get(units, 'unknown')})",
+    "Upper transducer limit": f"{upper:.4f}",
+    "Lower transducer limit": f"{lower:.4f}",
     "Minimum span": f"{min_span:.4f}",
   }
+
+
+def decode_cmd16(payload: bytes) -> dict:
+  if len(payload) < 3:
+    return {"error": f"Too short: {len(payload)} bytes (need 3)"}
+  return {"Final assembly number": (payload[0] << 16) | (payload[1] << 8) | payload[2]}
+
 
 def decode_cmd20(payload: bytes) -> dict:
   if len(payload) != 32:
@@ -475,6 +535,19 @@ def decode_cmd20(payload: bytes) -> dict:
   return {
     "Long Tag": long_tag
   }
+
+
+def decode_cmd38(payload: bytes) -> dict:
+  if len(payload) < 2:
+    return {"error": f"Too short: {len(payload)} bytes (need 2)"}
+  return {"Config Change Count": (payload[0] << 8) | payload[1]}
+
+
+def decode_cmd59(payload: bytes) -> dict:
+  if len(payload) < 1:
+    return {"error": "No payload"}
+  return {"Response preambles": payload[0]}
+
 
 def decode_cmd48(payload: bytes) -> dict:
   if not payload:
@@ -513,37 +586,12 @@ def decode_cmd54(payload: bytes) -> dict:
 
 def _decode_packed_ascii(data: bytes) -> str:
   """Decode HART packed-ASCII (6-bit encoding, 3 bytes -> 4 chars)."""
-  result = []
-  def _unpack6(v: int) -> str:
-    # Spec: top two bits were dropped on packing. Bit5=0 -> original had bit6 set
-    # (0x40-0x5F); bit5=1 -> 0x20-0x3F unchanged.
-    v &= 0x3F
-    return chr(v if v & 0x20 else v | 0x40)
-
-  for i in range(0, len(data) - 2, 3):
-    b0, b1, b2 = data[i], data[i+1], data[i+2]
-    result.append(_unpack6(b0 >> 2))
-    result.append(_unpack6(b0 << 4 | b1 >> 4))
-    result.append(_unpack6(b1 << 2 | b2 >> 6))
-    result.append(_unpack6(b2))
-  return "".join(result)
+  return decode_packed_ascii(data)
 
 
 def _encode_packed_ascii(tag: str) -> bytes:
-  """Encode a string into 6-byte HART Packed ASCII (8 chars -> 6 bytes).
-  Input is padded/truncated to 8 characters. Per HART spec the top two bits of
-  each ASCII char (0x20-0x5F) are dropped, i.e. 6-bit value = ord(c) & 0x3F.
-  """
-  s = tag.upper().ljust(8)[:8]
-  chars = [ord(c) & 0x3F for c in s]
-  result = bytearray(6)
-  result[0] = ((chars[0] & 0x3F) << 2) | ((chars[1] >> 4) & 0x03)
-  result[1] = ((chars[1] & 0x0F) << 4) | ((chars[2] >> 2) & 0x0F)
-  result[2] = ((chars[2] & 0x03) << 6) | (chars[3] & 0x3F)
-  result[3] = ((chars[4] & 0x3F) << 2) | ((chars[5] >> 4) & 0x03)
-  result[4] = ((chars[5] & 0x0F) << 4) | ((chars[6] >> 2) & 0x0F)
-  result[5] = ((chars[6] & 0x03) << 6) | (chars[7] & 0x3F)
-  return bytes(result)
+  """Encode a tag into 6-byte HART Packed ASCII (8 chars, space padded)."""
+  return encode_packed_ascii(tag, 6)
 
 
 def decode_cmd11(payload: bytes) -> dict:
@@ -557,13 +605,23 @@ def decode_response(cmd: int, payload: bytes) -> dict | None:
     1:  decode_cmd1,
     2:  decode_cmd2,
     3:  decode_cmd3,
+    6:  decode_cmd6,
+    7:  decode_cmd6,
     11: decode_cmd11,
     12: decode_cmd12,
     13: decode_cmd13,
     14: decode_cmd14,
+    16: decode_cmd16,
+    17: decode_cmd12,   # response echoes the message
+    18: decode_cmd13,   # response echoes tag/descriptor/date
+    19: decode_cmd16,
     20: decode_cmd20,
+    21: decode_cmd0,
+    22: decode_cmd20,   # response echoes the long tag
+    38: decode_cmd38,
     48: decode_cmd48,
     54: decode_cmd54,
+    59: decode_cmd59,
   }
   fn = decoders.get(cmd)
   return fn(payload) if fn else None
@@ -633,40 +691,8 @@ class HartWorker(QThread):
           frame = build_short_frame(address, command, data,
                                     self._preambles, self._master_type)
 
-        self._port.reset_input_buffer()
-        self._port.write(frame)
-        self._port.flush()
         self.frame_logged.emit("TX", label, frame, 0.0)
-
-        # Wait for last TX byte to leave the wire, then start latency clock.
-        # 10 bits per byte (8O1) at 1200 baud.
-        tx_duration_s = len(frame) * 10.0 / HART_BAUD
-        time.sleep(tx_duration_s)
-        t_tx_end = time.perf_counter()
-
-        # Read response - stamp first-byte arrival for latency
-        raw = b""
-        t_first_byte = None
-        deadline = t_tx_end + self._timeout
-        while time.perf_counter() < deadline:
-          waiting = self._port.in_waiting
-          if waiting:
-            chunk = self._port.read(waiting)
-            if t_first_byte is None:
-              t_first_byte = time.perf_counter()
-            raw += chunk
-            time.sleep(0.02)
-          elif raw:
-            time.sleep(0.05)
-            if not self._port.in_waiting:
-              break
-          else:
-            time.sleep(0.02)
-
-        if t_first_byte is not None:
-          latency_ms = (t_first_byte - t_tx_end) * 1000.0
-        else:
-          latency_ms = (time.perf_counter() - t_tx_end) * 1000.0  # timeout, no response
+        raw, latency_ms, _wire = hart_exchange(self._port, frame, self._timeout)
         self.frame_logged.emit("RX", label, raw, latency_ms)
 
         parsed = parse_response(raw)
@@ -725,13 +751,189 @@ LOG_MUTED = "#94a3b8"
 
 
 # --- SCENARIO ENGINE --------------------------------------------------------
+#
+# Optional step keys (besides those listed in scenarios.py):
+#   expect_rc            int | list   response code(s) required
+#   expect_status_set    int          device status (st2) bits that must be set
+#   expect_status_clear  int          device status bits that must be clear
+#   expect_payload       ref          response data must equal ref
+#   expect_payload_one_of [ref,...]   response data must equal one of the refs
+#   payload_slice        [a, b]       compare only response data[a:b]
+#   expect_u16           {offset, ref, ref_offset, delta}
+#                                     Unsigned-16 at data[offset] must equal the
+#                                     one in saved ref at ref_offset plus delta
+#                                     (int or list of ints, modulo 2^16)
+#   save_as              str          store the response data under this name
+#   data_from            ref          request data taken from a saved response
+#   data_u16             {ref, offset, delta}
+#                                     request data = Unsigned-16 at saved ref
+#                                     [offset] plus delta (mod 2^16)
+#   broadcast            bool         long frame to the Broadcast Address
+#   retries / retry_delay int / float resend while there is no response
+#   manual               str          no frame: ask the operator, wait for OK
+#
+# A ref is bytes, a saved name, or (name, start, end) for a slice of it.
+# Steps with any expect_*/save_as key are strict: silence is always a failure.
+
+STEP_EXPECT_KEYS = ("expect_rc", "reject_rc", "check", "expect_status_set",
+                    "expect_status_clear", "expect_payload", "expect_payload_one_of",
+                    "expect_u16", "save_as")
+
+# Separates an informational remark (warning that does not fail the step) from
+# the result text in evaluate_step()'s reason.
+INFO_SEP = " | info: "
+
+
+def resolve_ref(ref, saved: dict) -> bytes:
+  if isinstance(ref, (bytes, bytearray)):
+    return bytes(ref)
+  if isinstance(ref, str):
+    if ref not in saved:
+      raise KeyError(f"no saved response '{ref}' (earlier step failed?)")
+    return saved[ref]
+  if isinstance(ref, (tuple, list)) and len(ref) == 3:
+    return resolve_ref(ref[0], saved)[ref[1]:ref[2]]
+  raise ValueError(f"bad reference {ref!r}")
+
+
+def _bits_text(mask: int) -> str:
+  names = [desc for bit, desc in DEVICE_STATUS_BITS.items() if mask & bit]
+  return ", ".join(names) if names else f"0x{mask:02X}"
+
+
+def step_is_strict(step: dict) -> bool:
+  return any(k in step for k in STEP_EXPECT_KEYS)
+
+
+def evaluate_step(step: dict, raw: bytes, parsed: dict | None, poll_addr: int,
+                  saved: dict, request_uid: bytes | None = None) -> tuple[bool, str]:
+  """Decide whether one scenario step passed. Pure function (no I/O, no Qt).
+  Returns (ok, reason)."""
+  cmd = step.get("cmd")
+  use_long = bool(step.get("use_long", False))
+  master = step.get("master", "primary")
+
+  if step.get("expect_no_response", False):
+    if not raw:
+      return True, "silent (expected)"
+    return False, "got a response, expected silence"
+
+  step_addr = step.get("_addr", poll_addr)
+  if not use_long and step_addr != poll_addr and not step_is_strict(step):
+    # Multi-drop sweep: only the configured address may answer
+    if not raw:
+      return True, "silent (no device at this address)"
+    return False, f"device answered at polling address {step_addr} (configured: {poll_addr})"
+
+  if not raw:
+    return False, "no response"
+  if not parsed or not parsed.get("ok"):
+    return False, f"parse error: {(parsed or {}).get('error', 'unknown')}"
+  if not parsed.get("is_ack"):
+    return False, f"not an ACK frame (delimiter 0x{parsed['delimiter']:02X})"
+  if not parsed.get("complete", True):
+    return False, "truncated response"
+  if not parsed.get("cs_ok"):
+    return False, "checksum error"
+  if parsed.get("cmd") != cmd:
+    return False, f"response is for command {parsed.get('cmd')}, request was {cmd}"
+  if parsed.get("is_long") != use_long:
+    return False, "response frame format (short/long) differs from the request"
+  if parsed.get("is_primary") != (master == "primary"):
+    return False, (f"response addressed to the {'primary' if parsed.get('is_primary') else 'secondary'}"
+                   f" master, request came from the {master} master")
+  addr = parsed.get("address", b"")
+  if not use_long:
+    if addr and (addr[0] & ADDR_MASK) != (step_addr & ADDR_MASK):
+      return False, f"response polling address {addr[0] & ADDR_MASK}, expected {step_addr}"
+  elif request_uid is not None and len(addr) == 5:
+    if bytes([addr[0] & ADDR_MASK]) + bytes(addr[1:]) != bytes([request_uid[0] & ADDR_MASK]) + bytes(request_uid[1:5]):
+      return False, "response long address differs from the request"
+  if parsed.get("comm_error"):
+    return False, parsed.get("status_text", "communication error")
+
+  rc = parsed["st1"]
+  st2 = parsed["st2"]
+  infos = []
+  exp_rc = step.get("expect_rc")
+  if callable(exp_rc):
+    # decided at run time from saved responses: (list | None, info)
+    exp_rc, info = exp_rc(saved)
+    if info:
+      infos.append(info)
+  if exp_rc is None and step.get("check") is not None:
+    exp_rc = 0                             # a content check needs a successful reply
+  if exp_rc is not None:
+    allowed = list(exp_rc) if isinstance(exp_rc, (list, tuple)) else [exp_rc]
+    if rc not in allowed:
+      return False, f"RC {rc} ({RESPONSE_CODES.get(rc, '?')}), expected {allowed}"
+  rej_rc = step.get("reject_rc")
+  if rej_rc is not None:
+    rejected = list(rej_rc) if isinstance(rej_rc, (list, tuple)) else [rej_rc]
+    if rc in rejected:
+      return False, f"RC {rc} ({RESPONSE_CODES.get(rc, '?')}), must not be {rejected}"
+
+  set_mask = step.get("expect_status_set", 0)
+  if (st2 & set_mask) != set_mask:
+    return False, f"device status 0x{st2:02X}: missing {_bits_text(set_mask & ~st2)}"
+  clr_mask = step.get("expect_status_clear", 0)
+  if st2 & clr_mask:
+    return False, f"device status 0x{st2:02X}: unexpected {_bits_text(st2 & clr_mask)}"
+
+  payload = parsed.get("payload", b"")
+  sl = step.get("payload_slice")
+  view = payload[sl[0]:sl[1]] if sl else payload
+  try:
+    if "expect_payload" in step:
+      ref = resolve_ref(step["expect_payload"], saved)
+      if view != ref:
+        return False, f"data {view.hex(' ')} != expected {ref.hex(' ')}"
+    if "expect_payload_one_of" in step:
+      refs = [resolve_ref(r, saved) for r in step["expect_payload_one_of"]]
+      if view not in refs:
+        return False, f"data {view.hex(' ')} matches none of {len(refs)} expected values"
+    if "expect_u16" in step:
+      e = step["expect_u16"]
+      off = e["offset"]
+      ref = resolve_ref(e["ref"], saved)
+      roff = e.get("ref_offset", off)
+      if len(payload) < off + 2 or len(ref) < roff + 2:
+        return False, "data too short for Unsigned-16 check"
+      val = (payload[off] << 8) | payload[off + 1]
+      base = (ref[roff] << 8) | ref[roff + 1]
+      deltas = e.get("delta", 0)
+      deltas = list(deltas) if isinstance(deltas, (list, tuple)) else [deltas]
+      if ((val - base) & 0xFFFF) not in [d & 0xFFFF for d in deltas]:
+        return False, f"value {val} (0x{val:04X}), expected {base} + {deltas}"
+  except (KeyError, ValueError) as ex:
+    return False, str(ex)
+
+  check = step.get("check")
+  if check is not None:
+    # callable(parsed, saved) -> (ok, message); message on success = info
+    ok, msg = check(parsed, saved)
+    if not ok:
+      return False, msg
+    if msg:
+      infos.append(msg)
+
+  reason = f"OK (RC {rc}, status 0x{st2:02X})"
+  if infos:
+    reason += INFO_SEP + " ".join(infos)
+  return True, reason
+
 
 class ScenarioRunner(QThread):
   """Executes a scenario step list sequentially on the serial port."""
   step_started  = pyqtSignal(int, str, str)       # step_idx, label, note
   step_done     = pyqtSignal(int, str, bytes, bytes, float)  # step_idx, label, tx, rx, latency_ms
+  step_result   = pyqtSignal(int, bool, str)       # step_idx, ok, reason
   step_error    = pyqtSignal(int, str, str)        # step_idx, label, error_msg
+  uid_learned   = pyqtSignal(bytes)                # long address learned from Cmd0
+  manual_prompt = pyqtSignal(int, str)             # step_idx, instruction for the operator
   scenario_done = pyqtSignal(int, int)             # steps_ok, steps_fail
+
+  RESPONSE_TIMEOUT_S = 2.0
 
   def __init__(self, port: serial.Serial, steps: list, unique_id: bytes | None,
                poll_addr: int):
@@ -741,11 +943,33 @@ class ScenarioRunner(QThread):
     self._unique_id = unique_id
     self._poll_addr = poll_addr
     self._abort = False
-    self._saved = {}   # name -> response payload captured by steps with "_save"
-    self.rc_results = {}   # step idx -> (ok, message) from check_rc()
+    self._saved = {}
+    self._manual_event = threading.Event()
+    self._manual_ok = False
 
   def abort(self):
     self._abort = True
+    self._manual_event.set()
+
+  def confirm_manual(self, ok: bool):
+    """Called by the GUI when the operator answers a manual step."""
+    self._manual_ok = ok
+    self._manual_event.set()
+
+  def _exchange(self, frame: bytes) -> tuple[bytes, float]:
+    reply, latency_ms, _wire = hart_exchange(self._port, frame, self.RESPONSE_TIMEOUT_S)
+    return reply, latency_ms
+
+  def _run_manual(self, idx: int, step: dict) -> tuple[bool, str]:
+    self._manual_ok = False
+    self._manual_event.clear()
+    self.manual_prompt.emit(idx, step["manual"])
+    self._manual_event.wait()
+    if self._abort or not self._manual_ok:
+      self._abort = True
+      return False, "cancelled by operator"
+    time.sleep(step.get("delay_post", 0.0))
+    return True, "confirmed by operator"
 
   def run(self):
     ok_count = 0
@@ -757,8 +981,16 @@ class ScenarioRunner(QThread):
 
       label    = step.get("label", f"Step {idx}")
       note     = step.get("note", "")
+      self.step_started.emit(idx, label, note)
+
+      if "manual" in step:
+        ok, reason = self._run_manual(idx, step)
+        ok_count += ok
+        fail_count += not ok
+        self.step_result.emit(idx, ok, reason)
+        continue
+
       cmd      = step["cmd"]
-      data     = step.get("data", b"")
       use_long = step.get("use_long", False)
       preambles = step.get("preambles", 5)
       master   = step.get("master", "primary")
@@ -766,99 +998,70 @@ class ScenarioRunner(QThread):
       delay_post = step.get("delay_post", 0.2)
       corrupt_cs        = step.get("_corrupt_cs", False)
       expect_no_resp    = step.get("expect_no_response", False)
-
-      save_key  = step.get("_save")        # store response payload under this name
-      data_from = step.get("_data_from")   # use a previously saved payload as request data
-
-      self.step_started.emit(idx, label, note)
-
-      if data_from:
-        saved = self._saved.get(data_from)
-        if saved is None:
-          self.step_error.emit(idx, label,
-            f"No saved value '{data_from}' to restore (the earlier read failed)")
-          fail_count += 1
-          continue
-        data = saved
+      step_addr = step.get("_addr", self._poll_addr)
 
       time.sleep(delay_pre)
 
       try:
-        # Build frame
-        if use_long and self._unique_id:
-          frame = build_long_frame(self._unique_id, cmd, data, preambles, master)
+        data = step.get("data", b"")
+        data_from = step.get("data_from", step.get("_data_from"))
+        if data_from is not None:
+          try:
+            data = resolve_ref(data_from, self._saved)
+          except KeyError:
+            fail_count += 1
+            self.step_result.emit(idx, False,
+              f"no saved value '{data_from}' to send (the earlier read failed)")
+            continue
+        if "data_u16" in step:
+          e = step["data_u16"]
+          ref = resolve_ref(e["ref"], self._saved)
+          off = e.get("offset", 0)
+          val = (((ref[off] << 8) | ref[off + 1]) + e.get("delta", 0)) & 0xFFFF
+          data = bytes([val >> 8, val & 0xFF])
+
+        uid = None
+        if use_long:
+          uid = BROADCAST_UNIQUE_ID if step.get("broadcast") else self._unique_id
+          if uid is None:
+            fail_count += 1
+            self.step_result.emit(idx, False, "no unique ID known - run a Cmd0 step first")
+            continue
+          frame = build_long_frame(uid, cmd, data, preambles, master)
         else:
-          # Support per-step address override (multi-drop sweep)
-          step_addr = step.get("_addr", self._poll_addr)
           frame = build_short_frame(step_addr, cmd, data, preambles, master)
 
         if corrupt_cs:
           frame = frame[:-1] + bytes([frame[-1] ^ 0xFF])
 
-        self._port.reset_input_buffer()
-        self._port.write(frame)
-        self._port.flush()
-
-        # Wait for last TX byte to leave the wire, then start latency clock.
-        # 10 bits per byte (8O1) at 1200 baud.
-        tx_duration_s = len(frame) * 10.0 / HART_BAUD
-        time.sleep(tx_duration_s)
-        t_tx_end = time.perf_counter()
-
-        # Collect response - stamp first-byte arrival for latency
-        raw = b""
-        t_first_byte = None
-        deadline = t_tx_end + 2.0
-        while time.perf_counter() < deadline:
-          waiting = self._port.in_waiting
-          if waiting:
-            chunk = self._port.read(waiting)
-            if t_first_byte is None:
-              t_first_byte = time.perf_counter()
-            raw += chunk
-            time.sleep(0.02)
-          elif raw:
-            time.sleep(0.05)
-            if not self._port.in_waiting:
-              break
-          else:
-            time.sleep(0.02)
-
-        if t_first_byte is not None:
-          latency_ms = (t_first_byte - t_tx_end) * 1000.0
-        else:
-          latency_ms = (time.perf_counter() - t_tx_end) * 1000.0  # timeout, no response
-        parsed = parse_response(raw)
-        if parsed and parsed.get("ok"):
-          self.rc_results[idx] = check_rc(step, parsed, self._saved)
+        attempts = 1 + (0 if expect_no_resp else step.get("retries", 0))
+        for attempt in range(attempts):
+          raw, latency_ms = self._exchange(frame)
+          if raw or self._abort:
+            break
+          if attempt + 1 < attempts:
+            time.sleep(step.get("retry_delay", 0.5))
         self.step_done.emit(idx, label, frame, raw, latency_ms)
 
-        step_addr = step.get("_addr", self._poll_addr)
-        addr_mismatch = step_addr != self._poll_addr
-
-        if expect_no_resp:
-          # Silence = pass; any response = fail (bus collision / non-conformant slave)
-          if not raw:
-            ok_count += 1
-          else:
-            fail_count += 1
-        elif addr_mismatch and not raw:
-          # Multi-drop sweep: no response at a non-configured address = correct
-          ok_count += 1
-        elif parsed and parsed.get("ok"):
-          if self.rc_results.get(idx, (True, ""))[0]:
-            ok_count += 1
-          else:
-            fail_count += 1
-          if save_key and parsed.get("st1") == 0 and parsed.get("cs_ok"):
-            self._saved[save_key] = bytes(parsed.get("payload", b""))
-          # Update unique ID if we learned it
-          if cmd == 0 and not corrupt_cs:
+        parsed = parse_response(raw)
+        ok, reason = evaluate_step(step, raw, parsed, self._poll_addr, self._saved,
+                                   request_uid=uid)
+        if ok and parsed and parsed.get("ok"):
+          if "save_as" in step:
+            self._saved[step["save_as"]] = parsed.get("payload", b"")
+          if "_save" in step and parsed.get("st1") == 0:
+            self._saved[step["_save"]] = parsed.get("payload", b"")
+          # Learn the long address only from a correctly addressed Cmd0 reply
+          if (cmd == 0 and not corrupt_cs and not step.get("broadcast")
+              and (use_long or step_addr == self._poll_addr)):
             decoded = decode_response(0, parsed.get("payload", b""))
             if decoded and "_unique_id" in decoded:
               self._unique_id = decoded["_unique_id"]
-        else:
-          fail_count += 1
+              self.uid_learned.emit(self._unique_id)
+
+        ok_count += ok
+        fail_count += not ok
+        self.step_result.emit(idx, ok, reason)
 
         time.sleep(delay_post)
 
@@ -1049,17 +1252,17 @@ class HartMasterSim(QMainWindow):
     self._cb_addr_mode.currentIndexChanged.connect(self._update_addr_mode)
     layout.addWidget(self._cb_addr_mode, 0, 1)
 
-    layout.addWidget(QLabel("Poll addr (0-15)"), 1, 0)
+    layout.addWidget(QLabel("Poll addr (0-63)"), 1, 0)
     self._spin_addr = QSpinBox()
-    self._spin_addr.setRange(0, 15)
+    self._spin_addr.setRange(0, 63)  # HART 7 polling addresses 0-63
     layout.addWidget(self._spin_addr, 1, 1)
 
     layout.addWidget(QLabel("Unique ID"), 2, 0)
     self._le_unique_id = QLineEdit()
-    self._le_unique_id.setPlaceholderText("e.g. E8 01 01 23 45")
+    self._le_unique_id.setPlaceholderText("e.g. 27 8B 01 23 45")
     self._le_unique_id.setEnabled(False)
     self._le_unique_id.setToolTip(
-      "5 bytes hex: ManufID DevType DevID[3]\n"
+      "5 bytes hex (HART 7): ExpDevType MSB (6 bits), ExpDevType LSB, DevID[3]\n"
       "Learned automatically from Cmd0 response.\nOr enter manually.")
     layout.addWidget(self._le_unique_id, 2, 1)
 
@@ -1121,8 +1324,8 @@ class HartMasterSim(QMainWindow):
     if not ok:
       return
     tag_data = _encode_packed_ascii(tag_str)
-    # Spec: may use long frame address or broadcast address (short addr 0).
-    # Use long frame if unique_id learned, otherwise broadcast short frame addr=0.
+    # Spec: the device's long frame address or the Broadcast Address (the
+    # all-zero long address). Use the long address if learned, else broadcast.
     if self._unique_id:
       self._worker.queue_command(
         0, 11, tag_data,
@@ -1132,14 +1335,14 @@ class HartMasterSim(QMainWindow):
     else:
       self._worker.queue_command(
         0, 11, tag_data,
-        use_long=False, unique_id=None,
+        use_long=True, unique_id=BROADCAST_UNIQUE_ID,
         label="Cmd11 - Read Unique ID by Tag (broadcast)"
       )
     encoded_hex = " ".join(f"{b:02X}" for b in tag_data)
     self._log_info(
       f"  Cmd11: tag={repr(tag_str.upper().ljust(8)[:8])}  "
       f"packed={encoded_hex}  "
-      f"frame={'long' if self._unique_id else 'broadcast short'}"
+      f"frame={'long' if self._unique_id else 'long broadcast'}"
     )
 
   def _send_cmd54_prompt(self):
@@ -1900,6 +2103,34 @@ class HartMasterSim(QMainWindow):
     self._lbl_scenario_summary.setText(f"{len(steps)} steps - press RUN to start")
     self._scenario_hints.clear()
 
+  def _start_runner(self, name: str, steps: list, done_slot):
+    """Create and start a ScenarioRunner for `steps` (shared by Run / Run All)."""
+    self._on_scenario_changed(self._cb_scenario.currentIndex())
+    self._scenario_hints.clear()
+    self._active_steps = list(steps)
+
+    self._scenario_runner = ScenarioRunner(
+      port=self._worker._port,
+      steps=self._active_steps,
+      unique_id=self._get_unique_id(),
+      poll_addr=self._spin_addr.value(),
+    )
+    self._scenario_runner.step_started.connect(self._on_scenario_step_start)
+    self._scenario_runner.step_done.connect(self._on_scenario_step_done)
+    self._scenario_runner.step_result.connect(self._on_scenario_step_result)
+    self._scenario_runner.step_error.connect(self._on_scenario_step_error)
+    self._scenario_runner.uid_learned.connect(self._on_scenario_uid_learned)
+    self._scenario_runner.manual_prompt.connect(self._on_scenario_manual_prompt)
+    self._scenario_runner.scenario_done.connect(done_slot)
+
+    self._scenario_progress.setMaximum(len(steps))
+    self._scenario_progress.setValue(0)
+    self._btn_scenario_run.setEnabled(False)
+    self._btn_scenario_run_all.setEnabled(False)
+    self._btn_scenario_abort.setEnabled(True)
+    self._lbl_scenario_summary.setText(f"Running: {name}")
+    self._scenario_runner.start()
+
   def _run_scenario(self):
     if not self._connected:
       self._log_info("Not connected - cannot run scenario")
@@ -1914,38 +2145,8 @@ class HartMasterSim(QMainWindow):
     if not steps:
       return
 
-    # Reset table
-    self._on_scenario_changed(self._cb_scenario.currentIndex())
-    self._scenario_hints.clear()
-
-    # For multi-drop sweep, patch address from UI spin
-    patched = []
-    base_addr = self._spin_addr.value()
-    for step in steps:
-      s = dict(step)
-      # Address sweep scenario: use addr encoded in label "addr N" → handled by runner via poll_addr per step
-      patched.append(s)
-
-    self._scenario_runner = ScenarioRunner(
-      port=self._worker._port,
-      steps=patched,
-      unique_id=self._unique_id,
-      poll_addr=base_addr,
-    )
-    self._scenario_runner.step_started.connect(self._on_scenario_step_start)
-    self._scenario_runner.step_done.connect(self._on_scenario_step_done)
-    self._scenario_runner.step_error.connect(self._on_scenario_step_error)
-    self._scenario_runner.scenario_done.connect(self._on_scenario_done)
-
-    self._scenario_progress.setMaximum(len(steps))
-    self._scenario_progress.setValue(0)
-    self._btn_scenario_run.setEnabled(False)
-    self._btn_scenario_run_all.setEnabled(False)
-    self._btn_scenario_abort.setEnabled(True)
-    self._lbl_scenario_summary.setText(f"Running: {name}")
-
     self._log_info(f"\n\n═══ SCENARIO START: {name} ═══")
-    self._scenario_runner.start()
+    self._start_runner(name, steps, self._on_scenario_done)
 
   def _run_all_scenarios(self):
     if not self._connected:
@@ -1956,7 +2157,8 @@ class HartMasterSim(QMainWindow):
       return
 
     import random
-    names = list(SCENARIOS.keys())
+    names = [n for n in SCENARIOS.keys() if not SCENARIOS[n].get("manual_only")]
+    skipped = [n for n in SCENARIOS.keys() if SCENARIOS[n].get("manual_only")]
     if self._chk_random_order.isChecked():
       seed = int(time.time() * 1000) & 0xFFFFFFFF
       rng = random.Random(seed)
@@ -1965,6 +2167,8 @@ class HartMasterSim(QMainWindow):
       self._log_info("Order: " + " → ".join(f"#{list(SCENARIOS.keys()).index(n)+1}" for n in names))
     else:
       self._log_info("\n\n═══ RUN ALL: sequential order ═══")
+    if skipped:
+      self._log_info("Skipped (operator interaction needed, run individually): " + "; ".join(skipped))
 
     self._run_all_queue = names
     self._run_all_total = len(names)
@@ -2003,30 +2207,8 @@ class HartMasterSim(QMainWindow):
       self._advance_run_all()
       return
 
-    self._on_scenario_changed(self._cb_scenario.currentIndex())
-    self._scenario_hints.clear()
-
-    base_addr = self._spin_addr.value()
-    self._scenario_runner = ScenarioRunner(
-      port=self._worker._port,
-      steps=list(steps),
-      unique_id=self._unique_id,
-      poll_addr=base_addr,
-    )
-    self._scenario_runner.step_started.connect(self._on_scenario_step_start)
-    self._scenario_runner.step_done.connect(self._on_scenario_step_done)
-    self._scenario_runner.step_error.connect(self._on_scenario_step_error)
-    self._scenario_runner.scenario_done.connect(self._on_run_all_step_done)
-
-    self._scenario_progress.setMaximum(len(steps))
-    self._scenario_progress.setValue(0)
-    # Lock buttons during run-all execution
-    self._btn_scenario_run.setEnabled(False)
-    self._btn_scenario_run_all.setEnabled(False)
-    self._btn_scenario_abort.setEnabled(True)
-    self._lbl_scenario_summary.setText(f"Running: {name}")
     self._log_info(f"\n\n═══ SCENARIO START [{current}/{self._run_all_total}]: {name} ═══")
-    self._scenario_runner.start()
+    self._start_runner(name, steps, self._on_run_all_step_done)
 
   def _on_run_all_step_done(self, ok_count: int, fail_count: int):
     """Called after each scenario completes during Run All."""
@@ -2064,8 +2246,13 @@ class HartMasterSim(QMainWindow):
       item.setText("⏳ running")
       item.setForeground(QColor("#fbbf24"))
 
+  def _active_step(self, idx: int) -> dict:
+    steps = getattr(self, "_active_steps", None) or []
+    return steps[idx] if idx < len(steps) else {}
+
   def _on_scenario_step_done(self, idx: int, label: str,
                               tx: bytes, rx: bytes, latency_ms: float):
+    """Log the exchange. Pass/fail is decided by the runner (step_result)."""
     self._scenario_progress.setValue(idx + 1)
     # Feed latency into Timing/Stats tab (same as _on_response does for manual commands)
     if rx:
@@ -2076,16 +2263,22 @@ class HartMasterSim(QMainWindow):
           self._timing_data[key] = []
         self._timing_data[key].append(latency_ms)
         self._refresh_timing_table()
-    sc_name = self._cb_scenario.currentText()
-    steps = SCENARIOS.get(sc_name, {}).get("steps", [])
-    step_def = steps[idx] if idx < len(steps) else {}
+    step_def = self._active_step(idx)
     expect_no_resp = step_def.get("expect_no_response", False)
     step_addr = step_def.get("_addr", None)
-    addr_mismatch = step_addr is not None and step_addr != self._spin_addr.value()
+    addr_mismatch = (step_addr is not None and step_addr != self._spin_addr.value()
+                     and not step_is_strict(step_def))
     expected_silence = expect_no_resp or (addr_mismatch and not rx)
 
     self._log_frame("TX", label, tx, 0.0)
     self._log_frame("RX", label, rx, latency_ms, expected_silence=expected_silence)
+
+    lat_item = self._scenario_table.item(idx, 3)
+    if not lat_item:
+      lat_item = QTableWidgetItem()
+      self._scenario_table.setItem(idx, 3, lat_item)
+    lat_item.setText(f"{latency_ms:.0f} ms" if rx else "timeout")
+    lat_item.setForeground(QColor("#e2e8f0"))
 
     parsed = parse_response(rx)
 
@@ -2106,92 +2299,63 @@ class HartMasterSim(QMainWindow):
       if parsed.get("dev_flags"):
         summary_lines.append(
           (f"     Device: {', '.join(parsed['dev_flags'])}", LOG_INFO_COLOR))
+      decoded = decode_response(parsed.get("cmd", -1), parsed.get("payload", b""))
+      if decoded and "error" not in decoded:
+        fields = [f"{k}={v}" for k, v in decoded.items() if not k.startswith("_") and v is not None]
+        if fields:
+          summary_lines.append(("     Data: " + "; ".join(fields), LOG_DECODED_COLOR))
       for text, color in summary_lines:
         self._append_log(text, color)
 
-    if expect_no_resp:
-      ok = not rx  # silence = correct behavior
-      result_text = "✓ SILENT (expected)" if ok else "✗ GOT RESPONSE (should be silent)"
-      result_color = "#4ade80" if ok else "#f87171"
-      if not ok:
-        is_corrupt = steps[idx].get("_corrupt_cs", False) if idx < len(steps) else False
-        if is_corrupt:
-          self._scenario_hints.append(
-            f"  ⚠ Step {idx+1}: Slave responded to a frame with a bad checksum.\n"
-            f"    Conformant slave must silently discard corrupted frames.\n")
-        else:
-          self._scenario_hints.append(
-            f"  ⚠ Step {idx+1}: Slave responded to broadcast/silence-expected frame.\n"
-            f"    This causes bus collisions in multi-drop. Check address filtering.\n")
-    else:
-      ok = parsed is not None and parsed.get("ok", False)
-
-      # Learn unique ID from scenario steps too
-      if ok and parsed.get("cmd") == 0:
-        decoded = decode_response(0, parsed.get("payload", b""))
-        if decoded and "_unique_id" in decoded:
-          uid = decoded["_unique_id"]
-          self._unique_id = uid
-          uid_str = " ".join(f"{b:02X}" for b in uid)
-          self._le_unique_id.setText(uid_str)
-          self._lbl_unique_learned.setText(f"✓ Learned: {uid_str}")
-          self._lbl_unique_learned.setStyleSheet("color: #4caf50;")
-
-      # Response-code expectations (expect_rc / reject_rc) evaluated by the runner
-      rc_res = getattr(self._scenario_runner, "rc_results", {}).get(idx)
-      rc_msg = None
-      rc_info = ""
-      if rc_res:
-        if ok and not rc_res[0]:
-          ok = False
-          rc_msg = rc_res[1]
-        elif rc_res[0]:
-          rc_info = rc_res[1]
-
-      # Multi-drop: silence on a non-matching address is correct, not an error
-      sc_name = self._cb_scenario.currentText()
-      step_def = SCENARIOS.get(sc_name, {}).get("steps", [])
-      step_addr = step_def[idx].get("_addr", None) if idx < len(step_def) else None
-      addr_mismatch = (step_addr is not None and step_addr != self._spin_addr.value())
-      if addr_mismatch and not rx:
-        ok = True
-        result_text = "✓ SILENT (no device at this addr)"
-        result_color = "#4ade80"
+  def _on_scenario_step_result(self, idx: int, ok: bool, reason: str):
+    self._scenario_progress.setValue(idx + 1)
+    step_def = self._active_step(idx)
+    if ok:
+      if step_def.get("expect_no_response") or reason.startswith("silent"):
+        result_text = "✓ SILENT (expected)"
       else:
-        if rc_msg:
-          result_text = "✗ CHECK FAILED"
-        else:
-          result_text = "✓ OK" if ok else ("✗ NO RESPONSE" if not rx else "✗ PARSE ERR")
-        result_color = "#4ade80" if ok else "#f87171"
-
-      if not ok:
-        hint = ""
-        if rc_msg:
-          hint = rc_msg
-        elif not rx:
-          hint = "No response - check: baud/parity (1200 8O1), preamble count, address, wiring."
-        elif parsed and not parsed.get("cs_ok"):
-          hint = "Response received but checksum failed - possible line noise or half-duplex echo."
-        elif parsed and "error" in parsed:
-          hint = f"Parse error: {parsed['error']}"
-        if hint:
-          self._scenario_hints.append(f"  ⚠ Step {idx+1}: {hint}\n")
-      if ok and rc_info:
-        self._scenario_hints.append(f"  ℹ Step {idx+1}: {rc_info}\n")
+        result_text = "✓ OK"
+      result_color = "#4ade80"
+    else:
+      result_text = f"✗ {reason}"
+      result_color = "#f87171"
+      hint = reason
+      if reason == "no response":
+        hint = "No response - check: baud/parity (1200 8O1), preamble count, address, wiring."
+      elif reason.startswith("got a response") and step_def.get("_corrupt_cs"):
+        hint = ("Slave responded to a frame with a bad checksum.\n"
+                "    Conformant slave must silently discard corrupted frames.")
+      elif reason.startswith("got a response"):
+        hint = ("Slave responded to a frame that must be ignored (broadcast/silence expected).\n"
+                "    This causes bus collisions in multi-drop. Check address filtering.")
+      self._scenario_hints.append(f"  ⚠ Step {idx+1}: {hint}\n")
+    if ok and INFO_SEP in reason:
+      self._scenario_hints.append(f"  ℹ Step {idx+1}: {reason.split(INFO_SEP, 1)[1]}\n")
+    self._log_info(f"     Result: {'PASS' if ok else 'FAIL'} - {reason}",
+                   color=LOG_RX_OK_COLOR if ok else LOG_RX_ERR_COLOR)
 
     result_item = self._scenario_table.item(idx, 2)
     if not result_item:
       result_item = QTableWidgetItem()
       self._scenario_table.setItem(idx, 2, result_item)
     result_item.setText(result_text)
+    result_item.setToolTip(reason)
     result_item.setForeground(QColor(result_color))
 
-    lat_item = self._scenario_table.item(idx, 3)
-    if not lat_item:
-      lat_item = QTableWidgetItem()
-      self._scenario_table.setItem(idx, 3, lat_item)
-    lat_item.setText(f"{latency_ms:.0f} ms")
-    lat_item.setForeground(QColor("#e2e8f0"))
+  def _on_scenario_uid_learned(self, uid: bytes):
+    self._unique_id = uid
+    uid_str = " ".join(f"{b:02X}" for b in uid)
+    self._le_unique_id.setText(uid_str)
+    self._lbl_unique_learned.setText(f"✓ Learned: {uid_str}")
+    self._lbl_unique_learned.setStyleSheet("color: #4caf50;")
+
+  def _on_scenario_manual_prompt(self, idx: int, text: str):
+    self._log_info(f"     Waiting for operator: {text}")
+    answer = QMessageBox.question(
+      self, f"Scenario step {idx+1} - operator action", text + "\n\nPress OK when done.",
+      QMessageBox.Ok | QMessageBox.Cancel, QMessageBox.Ok)
+    if self._scenario_runner:
+      self._scenario_runner.confirm_manual(answer == QMessageBox.Ok)
 
   def _on_scenario_step_error(self, idx: int, label: str, msg: str):
     self._scenario_progress.setValue(idx + 1)
@@ -2219,9 +2383,10 @@ class HartMasterSim(QMainWindow):
         "• Preamble count mismatch (slave needs ≥5, Rockwell sends 20)\n"
         "• HART baud must be exactly 1200, 8O1\n"
         "• Half-duplex: TX echoed back on RX - use RS-485 modem or HART modem\n"
-        "• Slave only responds to primary master (0x02), rejects secondary (0x01)\n"
+        "• Primary/secondary master is address byte bit 7 (delimiter is 0x02/0x82 for both)\n"
         "• Slave only handles short-addr frames, rejects long-addr\n"
-        "• Cold-start: 'Configuration changed' bit set - send Cmd0 again\n"
+        "• Configuration Changed stays set until Cmd38 (per master); Cold Start clears\n"
+        "  after the first response to each master\n"
         "• HART revision mismatch (slave HART5 vs master expects HART7)\n"
       )
 
