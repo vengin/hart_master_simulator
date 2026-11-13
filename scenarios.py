@@ -5,29 +5,78 @@
 #   data       bytes – command data payload
 #   use_long   bool  – use long (unique-ID) address frame
 #   preambles  int|None – override preamble count for this step
-#   master     str|None – "primary" | "secondary"
+#   master     str|None – "primary" | "secondary" (address byte bit 7)
 #   delay_pre  float – sleep BEFORE sending (seconds)
 #   delay_post float – sleep AFTER response received (seconds)
 #   note       str   – diagnostic hint shown in log before step
+#
+# Optional checks (see ScenarioRunner / evaluate_step in hart_master_simulator.py):
+#   expect_rc, expect_status_set, expect_status_clear, expect_payload,
+#   expect_payload_one_of, payload_slice, expect_u16, save_as, data_from,
+#   broadcast, retries, retry_delay, manual. A scenario with "manual_only"
+#   needs an operator and is skipped by RUN ALL.
+
+from hart_codec import encode_packed_ascii, encode_date, encode_latin1
+
+# Device Status bits (Field Device Status byte)
+ST_CONFIG_CHANGED = 0x40
+ST_COLD_START     = 0x20
+
+# C0 response data: bytes 14-15 = Configuration Change Counter
+CCC_OFFSET = 14
+
+# Test values written by the configuration / NV scenarios (originals are read
+# first and restored at the end of each scenario)
+NV_TAG       = encode_packed_ascii("NVTEST01", 6)
+NV_DESC      = encode_packed_ascii("NV PERSIST TEST", 12)
+NV_DATE      = encode_date(13, 11, 2026)
+NV_C18       = NV_TAG + NV_DESC + NV_DATE
+NV_MSG       = encode_packed_ascii("HART NV PERSISTENCE TEST MESSAGE", 24)
+NV_FAN       = bytes([0x12, 0x34, 0x56])
+NV_LONG_TAG  = encode_latin1("Ectron NV persistence test tag", 32)
+TORN_C18     = encode_packed_ascii("TORNTEST", 6) + encode_packed_ascii("RESET IN SAVE", 12) + encode_date(14, 11, 2026)
+WRONG_TAG    = encode_packed_ascii("NOSUCHTG", 6)
+
+# Time for the device to store a change in EEPROM (HART NV writer: <= 1 byte per
+# main-loop pass, up to 5 ms each) and to boot after a Device Reset.
+NV_SAVE_WAIT_S = 1.5
+RESET_BOOT_WAIT_S = 3.0
+
+
+def _s(label, cmd, data=b"", **kw):
+  """Step with HART 7 defaults: long frame, primary master, 5 preambles."""
+  step = {"label": label, "cmd": cmd, "data": data, "use_long": True,
+          "preambles": 5, "master": "primary", "delay_pre": 0.3, "delay_post": 0.3}
+  step.update(kw)
+  return step
+
+
+def _discover(note="Short-frame Cmd0 at the configured polling address: learns the long address."):
+  return {"label": "Cmd0 short addr - discover device", "cmd": 0, "data": b"",
+          "use_long": False, "preambles": 5, "master": "primary",
+          "delay_pre": 0.5, "delay_post": 0.3, "expect_rc": 0, "note": note}
+
+
+def _after_reset(label, master="primary", **kw):
+  """First Cmd0 after a Device Reset / power cycle: retried until the device
+  has booted; Cold Start must be set for this master (proves the reset)."""
+  kw.setdefault("expect_status_set", 0)
+  kw["expect_status_set"] |= ST_COLD_START
+  return _s(label, 0, master=master, expect_rc=0, retries=20, retry_delay=0.5, **kw)
+
 
 # ---------------------------------------------------------------------------
 # Helpers for scenario 17 (Universal Command Conformance, test defs 3.1-3.17)
 # ---------------------------------------------------------------------------
 def _pack_ascii(text: str, nchars: int) -> bytes:
-  """HART Packed-ASCII (spec): pad/truncate to nchars, keep low 6 bits of each
-  char, 4 chars -> 3 bytes. Space (0x20) packs to 0x82 0x08 0x20 per 4 chars."""
-  s = text.upper().ljust(nchars)[:nchars]
-  v = [ord(c) & 0x3F for c in s]
-  out = bytearray()
-  for i in range(0, nchars, 4):
-    a, b, c, d = v[i:i + 4]
-    out += bytes([(a << 2) | (b >> 4), ((b & 0x0F) << 4) | (c >> 2), ((c & 0x03) << 6) | d])
-  return bytes(out)
+  """HART Packed-ASCII of nchars characters (4 chars -> 3 bytes)."""
+  return encode_packed_ascii(text, nchars * 3 // 4)
 
 
-def _s(label, cmd, data=b"", long=False, master="primary",
+def _u(label, cmd, data=b"", long=False, master="primary",
        pre=0.3, post=0.3, note="", **extra):
-  """Compact step builder (same keys the ScenarioRunner understands)."""
+  """Compact step builder for scenario 17 (short frame by default; the HART 7
+  scenarios use _s above, long frame by default)."""
   step = {"label": label, "cmd": cmd, "data": data, "use_long": long,
           "preambles": 5, "master": master, "delay_pre": pre, "delay_post": post,
           "note": note}
@@ -193,50 +242,50 @@ def _ual_steps():
   S = []
   # ---- Setup (needed so long-address, Cmd11 and Cmd21 steps can match) ----
   S += [
-    _s("[Setup] Cmd0 - learn unique ID", 0, pre=0.5,
+    _u("[Setup] Cmd0 - learn unique ID", 0, pre=0.5,
        note="Learns the unique ID used by all long-address steps below."),
-    _s("[Setup] Cmd7 - save original polling address", 7, long=True, _save="poll",
+    _u("[Setup] Cmd7 - save original polling address", 7, long=True, _save="poll",
        note="Saved so it can be restored at the end of the scenario."),
-    _s("[Setup] Cmd12 - save original message", 12, long=True, _save="msg",
+    _u("[Setup] Cmd12 - save original message", 12, long=True, _save="msg",
        note="Saved for restore."),
-    _s("[Setup] Cmd13 - save original tag/descriptor/date", 13, long=True, _save="tag",
+    _u("[Setup] Cmd13 - save original tag/descriptor/date", 13, long=True, _save="tag",
        note="Saved for restore."),
-    _s("[Setup] Cmd16 - save original final assembly no.", 16, long=True, _save="asm",
+    _u("[Setup] Cmd16 - save original final assembly no.", 16, long=True, _save="asm",
        note="Saved for restore."),
-    _s("[Setup] Cmd20 - save original long tag", 20, long=True, _save="ltag",
+    _u("[Setup] Cmd20 - save original long tag", 20, long=True, _save="ltag",
        note="Saved for restore."),
-    _s("[Setup] Cmd18 - write test tag/descriptor/date", 18, _WR_TAG_DATA, long=True,
+    _u("[Setup] Cmd18 - write test tag/descriptor/date", 18, _WR_TAG_DATA, long=True,
        note="Writes UAL_TAG so Cmd11 can match it. Skipped effect if device is write-protected (RC=7)."),
-    _s("[Setup] Cmd22 - write test long tag", 22, UAL_LONG_TAG, long=True,
+    _u("[Setup] Cmd22 - write test long tag", 22, UAL_LONG_TAG, long=True,
        note="Writes UAL_LONG_TAG so Cmd21 can match it."),
   ]
 
   # ---- 3.1 UAL000: every universal command must be implemented (RC != 64) ----
   n_ual000 = len(S)
   S += [
-    _s("[3.1 UAL000] Cmd0",  0,  long=True, note="UAL000: RC must NOT be 64 (command not implemented)."),
-    _s("[3.1 UAL000] Cmd1",  1,  long=True, note="UAL000: RC != 64."),
-    _s("[3.1 UAL000] Cmd2",  2,  long=True, note="UAL000: RC != 64."),
-    _s("[3.1 UAL000] Cmd3",  3,  long=True, note="UAL000: RC != 64."),
-    _s("[3.1 UAL000] Cmd6", 6, long=True, _data_from="poll",
+    _u("[3.1 UAL000] Cmd0",  0,  long=True, note="UAL000: RC must NOT be 64 (command not implemented)."),
+    _u("[3.1 UAL000] Cmd1",  1,  long=True, note="UAL000: RC != 64."),
+    _u("[3.1 UAL000] Cmd2",  2,  long=True, note="UAL000: RC != 64."),
+    _u("[3.1 UAL000] Cmd3",  3,  long=True, note="UAL000: RC != 64."),
+    _u("[3.1 UAL000] Cmd6", 6, long=True, _data_from="poll",
        note="UAL000: RC != 64. Writes back the original polling address / loop current mode (no change)."),
-    _s("[3.1 UAL000] Cmd7",  7,  long=True, note="UAL000: RC != 64."),
-    _s("[3.1 UAL000] Cmd8",  8,  long=True, note="UAL000: RC != 64."),
-    _s("[3.1 UAL000] Cmd9",  9,  bytes([0, 1, 2, 3]), long=True, note="UAL000: RC != 64."),
-    _s("[3.1 UAL000] Cmd11", 11, _TAG_PACKED, long=True, note="UAL000: RC != 64."),
-    _s("[3.1 UAL000] Cmd12", 12, long=True, note="UAL000: RC != 64."),
-    _s("[3.1 UAL000] Cmd13", 13, long=True, note="UAL000: RC != 64."),
-    _s("[3.1 UAL000] Cmd14", 14, long=True, note="UAL000: RC != 64."),
-    _s("[3.1 UAL000] Cmd15", 15, long=True, note="UAL000: RC != 64."),
-    _s("[3.1 UAL000] Cmd16", 16, long=True, note="UAL000: RC != 64."),
-    _s("[3.1 UAL000] Cmd17", 17, _WR_MSG_DATA, long=True, note="UAL000: RC != 64 (RC 7 is fine if write-protected)."),
-    _s("[3.1 UAL000] Cmd18", 18, _WR_TAG_DATA, long=True, note="UAL000: RC != 64 (RC 7 is fine if write-protected)."),
-    _s("[3.1 UAL000] Cmd19", 19, UAL_ASSEMBLY, long=True, note="UAL000: RC != 64 (RC 7 is fine if write-protected)."),
-    _s("[3.1 UAL000] Cmd20", 20, long=True, note="UAL000: RC != 64."),
-    _s("[3.1 UAL000] Cmd21", 21, UAL_LONG_TAG, long=True, note="UAL000: RC != 64."),
-    _s("[3.1 UAL000] Cmd22", 22, UAL_LONG_TAG, long=True, note="UAL000: RC != 64 (RC 7 is fine if write-protected)."),
-    _s("[3.1 UAL000] Cmd38", 38, long=True, note="UAL000: RC != 64."),
-    _s("[3.1 UAL000] Cmd48", 48, long=True, note="UAL000: RC != 64."),
+    _u("[3.1 UAL000] Cmd7",  7,  long=True, note="UAL000: RC != 64."),
+    _u("[3.1 UAL000] Cmd8",  8,  long=True, note="UAL000: RC != 64."),
+    _u("[3.1 UAL000] Cmd9",  9,  bytes([0, 1, 2, 3]), long=True, note="UAL000: RC != 64."),
+    _u("[3.1 UAL000] Cmd11", 11, _TAG_PACKED, long=True, note="UAL000: RC != 64."),
+    _u("[3.1 UAL000] Cmd12", 12, long=True, note="UAL000: RC != 64."),
+    _u("[3.1 UAL000] Cmd13", 13, long=True, note="UAL000: RC != 64."),
+    _u("[3.1 UAL000] Cmd14", 14, long=True, note="UAL000: RC != 64."),
+    _u("[3.1 UAL000] Cmd15", 15, long=True, note="UAL000: RC != 64."),
+    _u("[3.1 UAL000] Cmd16", 16, long=True, note="UAL000: RC != 64."),
+    _u("[3.1 UAL000] Cmd17", 17, _WR_MSG_DATA, long=True, note="UAL000: RC != 64 (RC 7 is fine if write-protected)."),
+    _u("[3.1 UAL000] Cmd18", 18, _WR_TAG_DATA, long=True, note="UAL000: RC != 64 (RC 7 is fine if write-protected)."),
+    _u("[3.1 UAL000] Cmd19", 19, UAL_ASSEMBLY, long=True, note="UAL000: RC != 64 (RC 7 is fine if write-protected)."),
+    _u("[3.1 UAL000] Cmd20", 20, long=True, note="UAL000: RC != 64."),
+    _u("[3.1 UAL000] Cmd21", 21, UAL_LONG_TAG, long=True, note="UAL000: RC != 64."),
+    _u("[3.1 UAL000] Cmd22", 22, UAL_LONG_TAG, long=True, note="UAL000: RC != 64 (RC 7 is fine if write-protected)."),
+    _u("[3.1 UAL000] Cmd38", 38, long=True, note="UAL000: RC != 64."),
+    _u("[3.1 UAL000] Cmd48", 48, long=True, note="UAL000: RC != 64."),
   ]
 
   for st in S[n_ual000:]:
@@ -244,168 +293,168 @@ def _ual_steps():
 
   # ---- 3.2 UAL001: Commands 1, 2, 3 ----
   S += [
-    _s("[3.2 UAL001] Cmd1 - PV (short)",     1, note="UAL001: PV unit code + float. Expect 5 data bytes."),
-    _s("[3.2 UAL001] Cmd1 - PV (long)",      1, long=True, note="Same via long address."),
-    _s("[3.2 UAL001] Cmd2 - current/%range", 2, note="UAL001: loop current + percent of range (8 data bytes)."),
-    _s("[3.2 UAL001] Cmd2 (long)",           2, long=True),
-    _s("[3.2 UAL001] Cmd3 - dynamic vars",   3, note="UAL001: loop current + up to 4 (unit,float) pairs. Values consistent with Cmd1/Cmd2."),
-    _s("[3.2 UAL001] Cmd3 (long)",           3, long=True),
+    _u("[3.2 UAL001] Cmd1 - PV (short)",     1, note="UAL001: PV unit code + float. Expect 5 data bytes."),
+    _u("[3.2 UAL001] Cmd1 - PV (long)",      1, long=True, note="Same via long address."),
+    _u("[3.2 UAL001] Cmd2 - current/%range", 2, note="UAL001: loop current + percent of range (8 data bytes)."),
+    _u("[3.2 UAL001] Cmd2 (long)",           2, long=True),
+    _u("[3.2 UAL001] Cmd3 - dynamic vars",   3, note="UAL001: loop current + up to 4 (unit,float) pairs. Values consistent with Cmd1/Cmd2."),
+    _u("[3.2 UAL001] Cmd3 (long)",           3, long=True),
   ]
 
   # ---- 3.3 UAL003: Commands 6 and 7 (polling address) ----
   S += [
-    _s("[3.3 UAL003] Cmd7 - read loop config (before)", 7, long=True,
+    _u("[3.3 UAL003] Cmd7 - read loop config (before)", 7, long=True,
        note="Records current polling address + loop current mode."),
-    _s("[3.3 UAL003] Cmd6 - write poll addr = %d" % UAL_POLL_TEST, 6, bytes([UAL_POLL_TEST, 1]), long=True,
+    _u("[3.3 UAL003] Cmd6 - write poll addr = %d" % UAL_POLL_TEST, 6, bytes([UAL_POLL_TEST, 1]), long=True,
        note="Long-addr write so it works regardless of current polling address."),
-    _s("[3.3 UAL003] Cmd7 - confirm new address", 7, long=True, pre=0.5,
+    _u("[3.3 UAL003] Cmd7 - confirm new address", 7, long=True, pre=0.5,
        note="Response must report the new polling address."),
-    _s("[3.3 UAL003] Cmd0 short @ new addr %d" % UAL_POLL_TEST, 0, pre=0.5, _addr=UAL_POLL_TEST,
+    _u("[3.3 UAL003] Cmd0 short @ new addr %d" % UAL_POLL_TEST, 0, pre=0.5, _addr=UAL_POLL_TEST,
        note="Device must now answer short-frame polling at the new address."),
-    _s("[3.3 UAL003] Cmd6 - restore original poll addr", 6, long=True, _data_from="poll",
+    _u("[3.3 UAL003] Cmd6 - restore original poll addr", 6, long=True, _data_from="poll",
        note="Restores the address saved in setup so remaining steps use the UI poll address."),
-    _s("[3.3 UAL003] Cmd7 - confirm restored", 7, long=True, pre=0.5),
-    _s("[3.3 UAL003] Cmd0 short @ restored addr", 0, pre=0.5,
+    _u("[3.3 UAL003] Cmd7 - confirm restored", 7, long=True, pre=0.5),
+    _u("[3.3 UAL003] Cmd0 short @ restored addr", 0, pre=0.5,
        note="Uses the UI 'Poll addr' - must equal the device's original polling address."),
   ]
 
   # ---- 3.4 UAL004: Command 11 ----
   S += [
-    _s("[3.4 UAL004] Cmd11 - matching tag (long)", 11, _TAG_PACKED, long=True,
+    _u("[3.4 UAL004] Cmd11 - matching tag (long)", 11, _TAG_PACKED, long=True,
        note="Response data must be identical to Cmd0 (manufacturer, type, revs, device ID)."),
-    _s("[3.4 UAL004] Cmd0 - compare with Cmd11", 0, long=True,
+    _u("[3.4 UAL004] Cmd0 - compare with Cmd11", 0, long=True,
        note="Compare identity fields with the Cmd11 result above."),
   ]
 
   # ---- 3.5 UAL005: Commands 12 and 17 ----
   S += [
-    _s("[3.5 UAL005] Cmd12 - read message (before)", 12, note="24 data bytes (32 packed chars)."),
-    _s("[3.5 UAL005] Cmd17 - write message", 17, _WR_MSG_DATA, post=0.4,
+    _u("[3.5 UAL005] Cmd12 - read message (before)", 12, note="24 data bytes (32 packed chars)."),
+    _u("[3.5 UAL005] Cmd17 - write message", 17, _WR_MSG_DATA, post=0.4,
        note="Writes UAL_MESSAGE. RC=7 means device is write-protected (see 3.9)."),
-    _s("[3.5 UAL005] Cmd12 - read back", 12,
+    _u("[3.5 UAL005] Cmd12 - read back", 12,
        note="Must return the message just written."),
   ]
 
   # ---- 3.6 UAL006: Commands 13 and 18 ----
   S += [
-    _s("[3.6 UAL006] Cmd13 - read tag/desc/date (before)", 13, note="21 data bytes."),
-    _s("[3.6 UAL006] Cmd18 - write tag/desc/date", 18, _WR_TAG_DATA, post=0.4,
+    _u("[3.6 UAL006] Cmd13 - read tag/desc/date (before)", 13, note="21 data bytes."),
+    _u("[3.6 UAL006] Cmd18 - write tag/desc/date", 18, _WR_TAG_DATA, post=0.4,
        note="Writes UAL_TAG / UAL_DESC / UAL_DATE."),
-    _s("[3.6 UAL006] Cmd13 - read back", 13,
+    _u("[3.6 UAL006] Cmd13 - read back", 13,
        note="Tag, descriptor and date must match the values written."),
   ]
 
   # ---- 3.7 UAL007: Commands 14 and 15 ----
   S += [
-    _s("[3.7 UAL007] Cmd14 - PV transducer info", 14,
+    _u("[3.7 UAL007] Cmd14 - PV transducer info", 14,
        note="Sensor S/N, limits units, upper/lower sensor limits, min span."),
-    _s("[3.7 UAL007] Cmd14 (long)", 14, long=True),
-    _s("[3.7 UAL007] Cmd15 - output info", 15,
+    _u("[3.7 UAL007] Cmd14 (long)", 14, long=True),
+    _u("[3.7 UAL007] Cmd15 - output info", 15,
        note="Alarm select, transfer function, range units, upper/lower range, damping, write-protect code, private-label distributor."),
-    _s("[3.7 UAL007] Cmd15 (long)", 15, long=True),
+    _u("[3.7 UAL007] Cmd15 (long)", 15, long=True),
   ]
 
   # ---- 3.8 UAL008: Commands 16 and 19 ----
   S += [
-    _s("[3.8 UAL008] Cmd16 - read final assembly (before)", 16, note="3 data bytes."),
-    _s("[3.8 UAL008] Cmd19 - write final assembly", 19, UAL_ASSEMBLY, post=0.4,
+    _u("[3.8 UAL008] Cmd16 - read final assembly (before)", 16, note="3 data bytes."),
+    _u("[3.8 UAL008] Cmd19 - write final assembly", 19, UAL_ASSEMBLY, post=0.4,
        note="Writes UAL_ASSEMBLY."),
-    _s("[3.8 UAL008] Cmd16 - read back", 16,
+    _u("[3.8 UAL008] Cmd16 - read back", 16,
        note="Must return the value just written."),
   ]
 
   # ---- 3.9 UAL009: Write protect ----
   S += [
-    _s("[3.9 UAL009] Cmd15 - read write-protect code", 15, _save="wp",
+    _u("[3.9 UAL009] Cmd15 - read write-protect code", 15, _save="wp",
        note="Write-protect code is Cmd15 data byte 15: 0 = no, 1 = yes, 250 = not used. If 1, every write below must return RC=7."),
-    _s("[3.9 UAL009] Cmd6 write attempt",  6,  long=True, _data_from="poll", expect_rc=_wp_expect(True), note="RC=7 expected if write-protected."),
-    _s("[3.9 UAL009] Cmd17 write attempt", 17, _WR_MSG_DATA, expect_rc=_wp_expect(), note="RC=7 expected if write-protected."),
-    _s("[3.9 UAL009] Cmd18 write attempt", 18, _WR_TAG_DATA, expect_rc=_wp_expect(), note="RC=7 expected if write-protected."),
-    _s("[3.9 UAL009] Cmd19 write attempt", 19, UAL_ASSEMBLY, expect_rc=_wp_expect(), note="RC=7 expected if write-protected."),
-    _s("[3.9 UAL009] Cmd22 write attempt", 22, UAL_LONG_TAG, long=True, expect_rc=_wp_expect(), note="RC=7 expected if write-protected."),
-    _s("[3.9 UAL009] Cmd0 - verify still alive", 0),
+    _u("[3.9 UAL009] Cmd6 write attempt",  6,  long=True, _data_from="poll", expect_rc=_wp_expect(True), note="RC=7 expected if write-protected."),
+    _u("[3.9 UAL009] Cmd17 write attempt", 17, _WR_MSG_DATA, expect_rc=_wp_expect(), note="RC=7 expected if write-protected."),
+    _u("[3.9 UAL009] Cmd18 write attempt", 18, _WR_TAG_DATA, expect_rc=_wp_expect(), note="RC=7 expected if write-protected."),
+    _u("[3.9 UAL009] Cmd19 write attempt", 19, UAL_ASSEMBLY, expect_rc=_wp_expect(), note="RC=7 expected if write-protected."),
+    _u("[3.9 UAL009] Cmd22 write attempt", 22, UAL_LONG_TAG, long=True, expect_rc=_wp_expect(), note="RC=7 expected if write-protected."),
+    _u("[3.9 UAL009] Cmd0 - verify still alive", 0),
   ]
 
   # ---- 3.10 UAL010: Cold start bit ----
   S += [
-    _s("[3.10 UAL010] Cmd0 - check cold start bit", 0, pre=0.5,
+    _u("[3.10 UAL010] Cmd0 - check cold start bit", 0, pre=0.5,
        note="Cold start (ST2 0x20) is only set after a power cycle. Power-cycle DUT and run this scenario right away for a meaningful result."),
-    _s("[3.10 UAL010] Cmd0 - bit must be clear", 0,
+    _u("[3.10 UAL010] Cmd0 - bit must be clear", 0,
        note="Cold start bit must be cleared after the first exchange."),
   ]
 
   # ---- 3.11 UAL011: Command 9 ----
   S += [
-    _s("[3.11 UAL011] Cmd9 - slots 0..3", 9, bytes([0, 1, 2, 3]), note="Each variable: code, class, units, float, status. Response must echo requested codes."),
-    _s("[3.11 UAL011] Cmd9 - dynamic vars PV/SV/TV/QV (246..249)", 9, bytes([246, 247, 248, 249])),
-    _s("[3.11 UAL011] Cmd9 - single var", 9, bytes([0]), note="Minimal request (1 variable)."),
-    _s("[3.11 UAL011] Cmd9 (long)", 9, bytes([0, 1, 2, 3]), long=True),
+    _u("[3.11 UAL011] Cmd9 - slots 0..3", 9, bytes([0, 1, 2, 3]), note="Each variable: code, class, units, float, status. Response must echo requested codes."),
+    _u("[3.11 UAL011] Cmd9 - dynamic vars PV/SV/TV/QV (246..249)", 9, bytes([246, 247, 248, 249])),
+    _u("[3.11 UAL011] Cmd9 - single var", 9, bytes([0]), note="Minimal request (1 variable)."),
+    _u("[3.11 UAL011] Cmd9 (long)", 9, bytes([0, 1, 2, 3]), long=True),
   ]
 
   # ---- 3.12 UAL012: Command 8 ----
   S += [
-    _s("[3.12 UAL012] Cmd8 - dynamic variable classification", 8,
+    _u("[3.12 UAL012] Cmd8 - dynamic variable classification", 8,
        note="4 data bytes: classification codes for PV/SV/TV/QV."),
-    _s("[3.12 UAL012] Cmd8 (long)", 8, long=True),
+    _u("[3.12 UAL012] Cmd8 (long)", 8, long=True),
   ]
 
   # ---- 3.13 UAL013: Commands 20 and 22 ----
   S += [
-    _s("[3.13 UAL013] Cmd20 - read long tag (before)", 20, note="32 data bytes."),
-    _s("[3.13 UAL013] Cmd22 - write long tag", 22, UAL_LONG_TAG, long=True, post=0.4,
+    _u("[3.13 UAL013] Cmd20 - read long tag (before)", 20, note="32 data bytes."),
+    _u("[3.13 UAL013] Cmd22 - write long tag", 22, UAL_LONG_TAG, long=True, post=0.4,
        note="Writes UAL_LONG_TAG (32 bytes, space padded)."),
-    _s("[3.13 UAL013] Cmd20 - read back", 20, note="Must match the long tag written."),
+    _u("[3.13 UAL013] Cmd20 - read back", 20, note="Must match the long tag written."),
   ]
 
   # ---- 3.14 UAL014: Command 0 ----
   S += [
-    _s("[3.14 UAL014] Cmd0 (short)", 0, pre=0.5, note="Expect 0xFE expansion code, HART revision, device IDs."),
-    _s("[3.14 UAL014] Cmd0 (long)",  0, long=True, note="Must return same identity as short frame."),
-    _s("[3.14 UAL014] Cmd0 (secondary master)", 0, master="secondary",
+    _u("[3.14 UAL014] Cmd0 (short)", 0, pre=0.5, note="Expect 0xFE expansion code, HART revision, device IDs."),
+    _u("[3.14 UAL014] Cmd0 (long)",  0, long=True, note="Must return same identity as short frame."),
+    _u("[3.14 UAL014] Cmd0 (secondary master)", 0, master="secondary",
        note="Secondary-master frame must also be answered."),
   ]
 
   # ---- 3.15 UAL015: Command 21 ----
   S += [
-    _s("[3.15 UAL015] Cmd21 - matching long tag", 21, UAL_LONG_TAG, long=True,
+    _u("[3.15 UAL015] Cmd21 - matching long tag", 21, UAL_LONG_TAG, long=True,
        note="Response data identical to Cmd0."),
-    _s("[3.15 UAL015] Cmd0 - compare with Cmd21", 0, long=True),
+    _u("[3.15 UAL015] Cmd0 - compare with Cmd21", 0, long=True),
   ]
 
   # ---- 3.16 UAL038: Command 38 ----
   S += [
-    _s("[3.16 UAL038] Cmd0 - config-changed bit (before)", 0,
+    _u("[3.16 UAL038] Cmd0 - config-changed bit (before)", 0,
        note="After the earlier writes, ST2 'Configuration changed' (0x40) is expected to be set."),
-    _s("[3.16 UAL038] Cmd38 - reset configuration changed flag", 38, long=True,
+    _u("[3.16 UAL038] Cmd38 - reset configuration changed flag", 38, long=True,
        note="HART 7 devices may expect the 2-byte config change counter; if RC=5 add it from Cmd0 bytes 14-15."),
-    _s("[3.16 UAL038] Cmd0 - config-changed bit must be clear", 0, pre=0.5,
+    _u("[3.16 UAL038] Cmd0 - config-changed bit must be clear", 0, pre=0.5,
        note="'Configuration changed' bit must now be cleared."),
   ]
 
   # ---- 3.17 UAL048: Command 48 ----
   S += [
-    _s("[3.17 UAL048] Cmd48 - additional device status", 48,
+    _u("[3.17 UAL048] Cmd48 - additional device status", 48,
        note="Expect >= 9 status bytes (HART 6/7). Check byte 0-5 specific status, byte 6 ext device status, byte 7 op mode, byte 8 standardized status 0."),
-    _s("[3.17 UAL048] Cmd48 (long)", 48, long=True),
-    _s("[3.17 UAL048] Cmd0 - 'More status available' bit", 0,
+    _u("[3.17 UAL048] Cmd48 (long)", 48, long=True),
+    _u("[3.17 UAL048] Cmd0 - 'More status available' bit", 0,
        note="If ST2 0x10 is set, Cmd48 must return non-zero status."),
   ]
   # ---- Teardown: restore the original device values saved in setup ----
   S += [
-    _s("[Restore] Cmd6 - original polling address", 6, long=True, _data_from="poll", post=0.4,
+    _u("[Restore] Cmd6 - original polling address", 6, long=True, _data_from="poll", post=0.4,
        note="Writes back the Cmd7 value captured in setup."),
-    _s("[Restore] Cmd17 - original message", 17, long=True, _data_from="msg", post=0.4),
-    _s("[Restore] Cmd18 - original tag/descriptor/date", 18, long=True, _data_from="tag", post=0.4),
-    _s("[Restore] Cmd19 - original final assembly no.", 19, long=True, _data_from="asm", post=0.4),
-    _s("[Restore] Cmd22 - original long tag", 22, long=True, _data_from="ltag", post=0.4),
-    _s("[Restore] Cmd38 - clear config-changed flag", 38, long=True,
+    _u("[Restore] Cmd17 - original message", 17, long=True, _data_from="msg", post=0.4),
+    _u("[Restore] Cmd18 - original tag/descriptor/date", 18, long=True, _data_from="tag", post=0.4),
+    _u("[Restore] Cmd19 - original final assembly no.", 19, long=True, _data_from="asm", post=0.4),
+    _u("[Restore] Cmd22 - original long tag", 22, long=True, _data_from="ltag", post=0.4),
+    _u("[Restore] Cmd38 - clear config-changed flag", 38, long=True,
        note="The restore writes set 'Configuration changed' again; clear it. Add the 2-byte counter if RC=5."),
-    _s("[Restore] Cmd0 - final check", 0, pre=0.5,
+    _u("[Restore] Cmd0 - final check", 0, pre=0.5,
        note="Device should answer at its original polling address."),
   ]
   # ---- Response content checks (pass/fail) ----
   i = next(k for k, st in enumerate(S) if st["label"].startswith("[3.3 UAL003] Cmd6 - write poll addr"))
-  S.insert(i, _s("[3.3 UAL003] Cmd0 - config counter (before Cmd6)", 0, long=True, _save="cnt6",
+  S.insert(i, _u("[3.3 UAL003] Cmd0 - config counter (before Cmd6)", 0, long=True, _save="cnt6",
                  note="Saves the configuration change counter to see whether Cmd6 changes it."))
   _attach(S, "[3.2 UAL001] Cmd1 - PV (short)", _save="pv")
   _attach(S, "[3.3 UAL003] Cmd0 short @ new addr", check=_chk_cmd6_counter)
@@ -501,21 +550,22 @@ SCENARIOS = {
 
   "3 - Secondary Master Probe (Emerson Trex)": {
     "description": (
-      "Emerson Trex communicates as secondary master (delimiter 0x01/0x81).\n"
+      "Emerson Trex communicates as secondary master: address byte bit 7 = 0\n"
+      "(primary master: bit 7 = 1). The delimiter is STX 0x02/0x82 for both.\n"
       "Sends Cmd0 first as primary then as secondary.\n"
-      "Slave must respond to both.\n"
-      "Diagnoses: slave rejects secondary master delimiter,\n"
-      "           or hardcodes primary-only check."
+      "Slave must respond to both, echoing the master bit in its response.\n"
+      "Diagnoses: slave rejects secondary master requests,\n"
+      "           or answers the wrong master."
     ),
     "steps": [
       {"label": "Cmd0 - primary master", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 5, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
-       "note": "Baseline: primary master delimiter 0x02."},
+       "note": "Baseline: primary master (address bit 7 = 1)."},
       {"label": "Cmd0 - secondary master", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 5, "master": "secondary",
        "delay_pre": 0.5, "delay_post": 0.5,
-       "note": "Secondary master delimiter 0x01. Slave must also respond."},
+       "note": "Secondary master (address bit 7 = 0). Slave must also respond."},
       {"label": "Cmd1 PV - secondary master", "cmd": 1, "data": b"",
        "use_long": False, "preambles": 5, "master": "secondary",
        "delay_pre": 0.3, "delay_post": 0.3,
@@ -747,77 +797,88 @@ SCENARIOS = {
     ]
   },
 
-  "11 - Write-Protect Probe (Cmd17/18/19)": {
+  "11 - Write Commands (Cmd17/18/19) - echo, counter, restore": {
     "description": (
-      "Attempts configuration writes to verify write-protect behavior:\n"
-      "• Cmd17 – write message (should return 0x07 if write-protected)\n"
-      "• Cmd18 – write tag/descriptor/date\n"
-      "• Cmd19 – write final assembly number\n"
-      "In write-protect mode, slave MUST return response code 0x07.\n"
-      "Diagnoses: slave silently ignores writes, corrupts config,\n"
-      "           or fails to set write-protect bit in status byte."
+      "Writes Message (Cmd17), Tag/Descriptor/Date (Cmd18) and Final Assembly\n"
+      "Number (Cmd19) with valid packed-ASCII / date values, then:\n"
+      "• response must echo the written data (RC 0)\n"
+      "• too-short requests must return RC 5 and change nothing\n"
+      "• Config Change Counter +1 per accepted write, Config Changed set\n"
+      "• Cmd12/13/16 read back the new values; originals restored at the end\n"
+      "Write protect is not implemented in this device (Cmd15 reports 251), so\n"
+      "RC 7 (In Write Protect Mode) cannot be provoked here."
     ),
     "steps": [
-      {"label": "Cmd0 - baseline status", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
-       "delay_pre": 0.5, "delay_post": 0.3,
-       "note": "Read status before write attempts. Note 'Analog output fixed' bit."},
-      {"label": "Cmd17 - write message (24 bytes)", "cmd": 17,
-       "data": bytes([0x20] * 24),  # packed-ASCII spaces
-       "use_long": False, "preambles": 5, "master": "primary",
-       "delay_pre": 0.3, "delay_post": 0.4,
-       "note": "Write blank message. If write-protected: expect RC=0x07. If not: message overwritten."},
-      {"label": "Cmd18 - write tag/descriptor/date", "cmd": 18,
-       "data": bytes([0x20] * 21),  # spaces tag + descriptor + date
-       "use_long": False, "preambles": 5, "master": "primary",
-       "delay_pre": 0.3, "delay_post": 0.4,
-       "note": "Write blank tag and descriptor. Expect RC=0x07 if write-protected."},
-      {"label": "Cmd19 - write final assembly number", "cmd": 19,
-       "data": bytes([0x00, 0x00, 0x00]),
-       "use_long": False, "preambles": 5, "master": "primary",
-       "delay_pre": 0.3, "delay_post": 0.4,
-       "note": "Write assembly number 0. Expect RC=0x07 if write-protected."},
-      {"label": "Cmd0 - verify no config change", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
-       "delay_pre": 0.4, "delay_post": 0.3,
-       "note": "'Configuration changed' bit should NOT be set if write-protect worked."},
+      _discover(),
+      _s("Cmd0 - counter before", 0, expect_rc=0, save_as="c0_before"),
+      _s("Cmd12 - read original message", 12, expect_rc=0, save_as="orig12"),
+      _s("Cmd13 - read original tag/descriptor/date", 13, expect_rc=0, save_as="orig13"),
+      _s("Cmd16 - read original final assembly number", 16, expect_rc=0, save_as="orig16"),
+      _s("Cmd17 - write message", 17, NV_MSG, expect_rc=0, expect_payload=NV_MSG,
+         note="Response must echo the 24 data bytes actually stored."),
+      _s("Cmd18 - write tag/descriptor/date", 18, NV_C18, expect_rc=0, expect_payload=NV_C18),
+      _s("Cmd19 - write final assembly number", 19, NV_FAN, expect_rc=0, expect_payload=NV_FAN),
+      _s("Cmd17 - 10 bytes only (expect RC 5)", 17, NV_MSG[:10], expect_rc=5),
+      _s("Cmd18 - 5 bytes only (expect RC 5)", 18, NV_C18[:5], expect_rc=5),
+      _s("Cmd19 - 2 bytes only (expect RC 5)", 19, NV_FAN[:2], expect_rc=5),
+      _s("Cmd0 - counter +3, Config Changed set", 0, expect_rc=0,
+         expect_status_set=ST_CONFIG_CHANGED,
+         expect_u16={"offset": CCC_OFFSET, "ref": "c0_before", "delta": 3},
+         note="Only the 3 accepted writes count; RC 5 requests must not change the counter."),
+      _s("Cmd12 - read back message", 12, expect_rc=0, expect_payload=NV_MSG),
+      _s("Cmd13 - read back tag/descriptor/date", 13, expect_rc=0, expect_payload=NV_C18),
+      _s("Cmd16 - read back final assembly number", 16, expect_rc=0, expect_payload=NV_FAN),
+      _s("Cmd17 - restore message", 17, data_from="orig12", expect_rc=0, expect_payload="orig12"),
+      _s("Cmd18 - restore tag/descriptor/date", 18, data_from="orig13", expect_rc=0, expect_payload="orig13"),
+      _s("Cmd19 - restore final assembly number", 19, data_from="orig16", expect_rc=0,
+         expect_payload="orig16"),
+      _s("Cmd38 primary - clear Config Changed", 38, expect_rc=0),
+      _s("Cmd38 secondary - clear Config Changed", 38, master="secondary", expect_rc=0,
+         delay_post=NV_SAVE_WAIT_S),
     ]
   },
 
-  "12 - Configuration Changed Recovery": {
+  "12 - Configuration Changed per Master + Cmd38": {
     "description": (
-      "Simulates the PLC cold-start / config-changed handling sequence:\n"
-      "• Cmd0 – check for 'Cold start' (0x20) and 'Config changed' (0x40) bits\n"
-      "• Cmd48 – read extended status to capture full snapshot\n"
-      "• Cmd0 × 3 – re-poll until status bits clear (PLCs retry up to N times)\n"
-      "Diagnoses: slave never clears Cold start bit, Config changed sticky after Cmd0,\n"
-      "           or 'More status available' bit loops indefinitely."
+      "HART 7.3.3: one Configuration Changed bit per master. A configuration\n"
+      "write sets it for BOTH masters; Cmd38 clears it only for the master that\n"
+      "sends it, and only if the (optional) counter matches (else RC 9).\n"
+      "Cmd0 does NOT clear it. The write here re-writes the current Cmd18\n"
+      "values, so the device configuration is unchanged.\n"
+      "Diagnoses: single shared bit, Cmd38 clearing both masters,\n"
+      "           counter check missing, bit cleared by other commands."
     ),
     "steps": [
-      {"label": "Cmd0 - initial (check cold-start/config bits)", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
-       "delay_pre": 0.5, "delay_post": 0.4,
-       "note": "ST2 byte: 0x20=ColdStart, 0x40=ConfigChanged, 0x10=MoreStatusAvail."},
-      {"label": "Cmd48 - extended status snapshot", "cmd": 48, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
-       "delay_pre": 0.3, "delay_post": 0.3,
-       "note": "Capture full extended status. Must send after 'More status available' bit set."},
-      {"label": "Cmd0 - retry #1 (expect bits clearing)", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
-       "delay_pre": 0.5, "delay_post": 0.4,
-       "note": "Cold-start and config-changed bits should clear after first valid Cmd0 exchange."},
-      {"label": "Cmd0 - retry #2", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
-       "delay_pre": 0.5, "delay_post": 0.4,
-       "note": "Second retry - bits must be clear by now on a conformant device."},
-      {"label": "Cmd1 - PV after recovery", "cmd": 1, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
-       "delay_pre": 0.3, "delay_post": 0.3,
-       "note": "Confirm normal operation restored after status-bit recovery sequence."},
-      {"label": "Cmd3 - all vars after recovery", "cmd": 3, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
-       "delay_pre": 0.3, "delay_post": 0.3,
-       "note": "Confirm all dynamic variables readable post-recovery."},
+      _discover(),
+      _s("Cmd13 - read tag/descriptor/date", 13, expect_rc=0, save_as="orig13"),
+      _s("Cmd18 - re-write the same values", 18, data_from="orig13", expect_rc=0,
+         expect_payload="orig13", note="Any accepted write is a configuration change."),
+      _s("Cmd0 primary - Config Changed set", 0, expect_rc=0,
+         expect_status_set=ST_CONFIG_CHANGED, save_as="c0_a"),
+      _s("Cmd0 primary again - still set (Cmd0 must not clear it)", 0, expect_rc=0,
+         expect_status_set=ST_CONFIG_CHANGED),
+      _s("Cmd0 secondary - Config Changed set", 0, master="secondary", expect_rc=0,
+         expect_status_set=ST_CONFIG_CHANGED),
+      _s("Cmd38 primary - wrong counter (expect RC 9)", 38,
+         data_u16={"ref": "c0_a", "offset": CCC_OFFSET, "delta": 1}, expect_rc=9,
+         expect_status_set=ST_CONFIG_CHANGED,
+         expect_payload_one_of=[b"", ("c0_a", CCC_OFFSET, CCC_OFFSET + 2)],
+         note="Device counter + 1 never matches. Bit must stay set. The response may carry the counter."),
+      _s("Cmd38 primary - matching counter", 38, data_from=("c0_a", CCC_OFFSET, CCC_OFFSET + 2),
+         expect_rc=0, expect_status_clear=ST_CONFIG_CHANGED,
+         expect_payload=("c0_a", CCC_OFFSET, CCC_OFFSET + 2),
+         note="Bit is reset immediately, i.e. already clear in this response."),
+      _s("Cmd0 primary - Config Changed clear", 0, expect_rc=0,
+         expect_status_clear=ST_CONFIG_CHANGED,
+         expect_u16={"offset": CCC_OFFSET, "ref": "c0_a", "delta": 0},
+         note="Cmd38 must not change the Config Change Counter."),
+      _s("Cmd0 secondary - still set", 0, master="secondary", expect_rc=0,
+         expect_status_set=ST_CONFIG_CHANGED,
+         note="Cmd38 from the primary master must not affect the secondary master's bit."),
+      _s("Cmd38 secondary - no counter (HART 6 style)", 38, master="secondary", expect_rc=0,
+         expect_status_clear=ST_CONFIG_CHANGED),
+      _s("Cmd0 secondary - Config Changed clear", 0, master="secondary", expect_rc=0,
+         expect_status_clear=ST_CONFIG_CHANGED, delay_post=NV_SAVE_WAIT_S),
     ]
   },
 
@@ -859,47 +920,59 @@ SCENARIOS = {
     ]
   },
 
-  "14 - Broadcast / Global Address (addr 63)": {
+  "14 - Broadcast Address (long frame 00 00 00 00 00)": {
     "description": (
-      "Tests slave behavior on broadcast address (short addr 63, 0x3F):\n"
-      "• HART spec: address 63 is global broadcast - slaves must NOT respond\n"
-      "• Slave responding to addr 63 causes bus collisions in multi-drop\n"
-      "• Followed by valid addressed Cmd0 to confirm slave is still alive\n"
-      "Diagnoses: slave incorrectly responds to broadcast,\n"
-      "           slave locks up after seeing broadcast address."
+      "HART 7 Broadcast Address = the all-zero 38-bit long frame address.\n"
+      "Only identity commands Cmd11/Cmd21 may use it (and answer only if the\n"
+      "tag matches); the response must carry the same (broadcast) address.\n"
+      "• Cmd0/Cmd1/Cmd6 to the broadcast address: device must stay silent\n"
+      "• Cmd11 with the device's tag: response, Cmd0 data\n"
+      "• Cmd11 with a wrong tag: no response\n"
+      "Note: short polling address 63 is a valid HART 7 polling address (0-63)\n"
+      "and is not a broadcast address; it is not tested here."
     ),
     "steps": [
-      {"label": "Cmd0 - normal addr (baseline)", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
-       "delay_pre": 0.5, "delay_post": 0.4,
-       "note": "Baseline: normal addressed Cmd0. Slave must respond."},
-      {"label": "Cmd0 - broadcast addr 63 (expect NO response)", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
-       "_addr": 63,
-       "expect_no_response": True,
-       "delay_pre": 0.5, "delay_post": 0.6,
-       "note": "Broadcast addr 0x3F. Conformant slave MUST NOT respond. Timeout = pass."},
-      {"label": "Cmd0 - normal addr (recovery check)", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
-       "delay_pre": 0.5, "delay_post": 0.4,
-       "note": "Slave must still respond normally after seeing broadcast."},
-      {"label": "Cmd1 - PV after broadcast", "cmd": 1, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
-       "delay_pre": 0.3, "delay_post": 0.3,
-       "note": "Confirm normal data flow after broadcast test."},
+      _discover(),
+      _s("Cmd13 - read own tag", 13, expect_rc=0, save_as="orig13"),
+      _s("Cmd0 - to broadcast addr (expect NO response)", 0, broadcast=True,
+         expect_no_response=True, delay_post=0.5),
+      _s("Cmd1 - to broadcast addr (expect NO response)", 1, broadcast=True,
+         expect_no_response=True, delay_post=0.5),
+      _s("Cmd6 - to broadcast addr (expect NO response)", 6, b"\x00\x01", broadcast=True,
+         expect_no_response=True, delay_post=0.5,
+         note="A broadcast write would re-address every device on the loop."),
+      _s("Cmd11 - broadcast, matching tag", 11, data_from=("orig13", 0, 6), broadcast=True,
+         expect_rc=0, save_as="c11_bcast",
+         note="Response address must be the broadcast address (same as request)."),
+      _s("Cmd11 - broadcast, wrong tag (expect NO response)", 11, WRONG_TAG, broadcast=True,
+         expect_no_response=True, delay_post=0.5),
+      _s("Cmd11 - own long address, matching tag", 11, data_from=("orig13", 0, 6), expect_rc=0,
+         expect_payload=("c11_bcast", 0, 14), payload_slice=[0, 14],
+         note="Same identity data as the broadcast answer (bytes 0-13)."),
+      _s("Cmd0 - recovery check", 0, expect_rc=0),
     ]
   },
 
-  "15 - Power-On Cold Start Validation": {
+  "15 - Cold Start per Master after Device Reset (Cmd42)": {
     "description": (
-      "Validates if slave handles cold-start flags:\n"
-      "• Sends baseline short-addr Cmd0\n"
-      "• Checks if 'Configuration changed' / 'Cold start' bit is set\n"
-      "• Sends second Cmd0 to see if bits clear properly."
+      "HART 7.3.3: one Cold Start bit per master, both set at power-up/reset;\n"
+      "the first response to each master clears that master's bit only.\n"
+      "• Cmd42 Device Reset, wait for reboot\n"
+      "• primary: 1st Cmd0 Cold Start set, 2nd clear\n"
+      "• secondary: 1st Cmd0 Cold Start still set, 2nd clear\n"
+      "Diagnoses: single shared Cold Start bit, bit never set, bit never cleared."
     ),
     "steps": [
-      {"label": "Initial Cmd0 Discovery", "cmd": 0, "data": b"", "use_long": False, "preambles": 5, "master": "primary", "delay_pre": 0.5, "delay_post": 0.3, "note": "Check device flags byte (st2) for Cold Start bit."},
-      {"label": "Verify Flag Clearing Cmd0", "cmd": 0, "data": b"", "use_long": False, "preambles": 5, "master": "primary", "delay_pre": 0.2, "delay_post": 0.2, "note": "Flag must clear on second transmission according to spec."}
+      _discover(),
+      _s("Cmd42 - Device Reset", 42, expect_rc=0, delay_post=RESET_BOOT_WAIT_S,
+         note="Device must answer first, then reset."),
+      _after_reset("Cmd0 primary - Cold Start set"),
+      _s("Cmd0 primary - Cold Start clear", 0, expect_rc=0, expect_status_clear=ST_COLD_START),
+      _s("Cmd0 secondary - Cold Start still set", 0, master="secondary", expect_rc=0,
+         expect_status_set=ST_COLD_START,
+         note="Serving the primary master must not clear the secondary master's bit."),
+      _s("Cmd0 secondary - Cold Start clear", 0, master="secondary", expect_rc=0,
+         expect_status_clear=ST_COLD_START),
     ]
   },
 
@@ -911,9 +984,14 @@ SCENARIOS = {
       "• Verifies slave doesn't freeze up under invalid inputs."
     ),
     "steps": [
-      {"label": "Send Unimplemented Cmd 99", "cmd": 99, "data": b"0000", "use_long": False, "preambles": 5, "master": "primary", "delay_pre": 0.3, "delay_post": 0.3, "note": "Slave must respond with error code 64, not time out."}
+      _discover(),
+      _s("Send Unimplemented Cmd 99 (long frame)", 99, b"", expect_rc=64,
+         note="Slave must respond with error code 64, not time out. Long frame: in HART 7 only "
+              "Cmd0 may be answered on a short (polling) address."),
+      _s("Cmd0 - still alive", 0, expect_rc=0),
     ]
   },
+
   "17 - Universal Command Conformance (UAL 3.1-3.17)": {
     "description": (
       "HART universal command conformance tests, sections 3.1-3.17:\n"
