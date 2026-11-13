@@ -296,6 +296,18 @@ def test_ual_detects_fault(kw, step):
   assert step in [lbl for i, lbl, r in failures(results)], failures(results)
 
 
+def test_ual_cmd9_rc14_warning_accepted_but_errors_fail():
+  # RC 14 (Dynamic Variables Returned for Device Variables) is a warning with
+  # full data, as the BUOS firmware answers Cmd9 for codes 0-3
+  _, fail, results = _ual()
+  assert fail == 0
+  assert any("RC 14" in r for i, lbl, ok, r in results if lbl.startswith("[3.11 UAL011]"))
+  step = next(st for st in SCENARIOS[scenario("17")]["steps"]
+              if st["label"].startswith("[3.11 UAL011] Cmd9 - slots"))
+  raw, parsed = _resp(cmd=9, rc=2)            # an error code must still fail
+  assert not sim.evaluate_step(step, raw, parsed, 0, {})[0]
+
+
 def test_ual_missing_saved_value_fails_the_data_from_step():
   # Cmd7 (poll addr) read fails -> every step sending _data_from="poll" must fail,
   # not send stale/empty data
