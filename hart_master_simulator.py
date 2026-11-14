@@ -1,4 +1,6 @@
 import sys
+import os
+import json
 import time
 import struct
 import threading
@@ -11,7 +13,8 @@ from PyQt5.QtWidgets import (
   QGridLayout, QLabel, QPushButton, QComboBox, QSpinBox, QDoubleSpinBox,
   QTextEdit, QGroupBox, QTabWidget, QLineEdit, QCheckBox, QSplitter,
   QFrame, QScrollArea, QSizePolicy, QStatusBar, QAction, QFileDialog,
-  QMessageBox, QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar
+  QMessageBox, QTableWidget, QTableWidgetItem, QHeaderView, QProgressBar,
+  QStyledItemDelegate
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QMutex
 from PyQt5.QtGui import QFont, QColor, QPalette, QTextCursor, QFontDatabase
@@ -1047,6 +1050,17 @@ class ScenarioRunner(QThread):
 
     self.scenario_done.emit(ok_count, fail_count)
 
+class StripeDelegate(QStyledItemDelegate):
+  """Row striping painted by the delegate. Qt's own alternatingRowColors combined
+  with a style sheet shifts the content of every other row by a few pixels."""
+  STRIPE = QColor("#0f172a")
+
+  def paint(self, painter, option, index):
+    if index.row() % 2:
+      painter.fillRect(option.rect, self.STRIPE)
+    super().paint(painter, option, index)
+
+
 class ScenarioTableWidget(QTableWidget):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
@@ -1055,7 +1069,10 @@ class ScenarioTableWidget(QTableWidget):
 
   def showEvent(self, event):
     super().showEvent(event)
-    self._last_w = self.viewport().width()
+    vw = self.viewport().width()
+    others = sum(self.columnWidth(c) for c in range(self.columnCount()) if c != 1)
+    self.setColumnWidth(1, max(vw - others, 100))
+    self._last_w = vw
 
   def resizeEvent(self, event):
     super().resizeEvent(event)
@@ -1071,10 +1088,13 @@ class ScenarioTableWidget(QTableWidget):
 
 class HartMasterSim(QMainWindow):
   RUN_ALL_GAP_MS = 800    # pause between scenarios during Run All
+  # Remembers the ticked scenarios between sessions
+  SETTINGS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "hart_master_simulator_settings.json")
 
   def __init__(self):
     super().__init__()
-    self.setWindowTitle("HART Master Simulator  v1.1.8")
+    self.setWindowTitle("HART Master Simulator  v1.1.9")
     self.setMinimumSize(1400, 750)
     self.resize(1482, 860)
 
@@ -1095,11 +1115,16 @@ class HartMasterSim(QMainWindow):
     self._run_all_current = None
     self._run_all_active = False
     self._run_all_results = []
+    self._run_all_title = "RUN ALL"
     self._log_lines = 0
     self._max_log_lines = 2000
     self._session_log = []
 
     self._build_ui()
+    # Uniform row striping on every table (see StripeDelegate)
+    for table in self.findChildren(QTableWidget):
+      table.setAlternatingRowColors(False)
+      table.setItemDelegate(StripeDelegate(table))
 #    self.setStyleSheet(STYLE)
     try:
       with open("style.qss", "r") as f:
@@ -1417,7 +1442,6 @@ class HartMasterSim(QMainWindow):
     self._decode_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
     self._decode_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
     self._decode_table.verticalHeader().setVisible(False)
-    self._decode_table.setAlternatingRowColors(True)
     self._decode_table.setEditTriggers(QTableWidget.NoEditTriggers)
     layout.addWidget(self._decode_table)
 
@@ -1993,51 +2017,102 @@ class HartMasterSim(QMainWindow):
     layout.setContentsMargins(8, 8, 8, 8)
     layout.setSpacing(6)
 
-    # Scenario selector
-    sel_row = QHBoxLayout()
-    sel_row.addWidget(QLabel("Scenario:"))
-    self._cb_scenario = QComboBox()
-    self._cb_scenario.setMinimumWidth(340)
-    for name in SCENARIOS:
-      self._cb_scenario.addItem(name)
-    self._cb_scenario.setMaxVisibleItems(len(SCENARIOS))
-    self._cb_scenario.currentIndexChanged.connect(self._on_scenario_changed)
-    sel_row.addWidget(self._cb_scenario, 1)
-    layout.addLayout(sel_row)
+    # Left: scenario list (checkbox per row) | right: details of the shown scenario
+    h_split = QSplitter(Qt.Horizontal)
+    layout.addWidget(h_split, 1)
 
-    # Description box
+    # ---- Left pane: scenario list ----
+    left_w = QWidget()
+    left_layout = QVBoxLayout(left_w)
+    left_layout.setContentsMargins(0, 0, 0, 0)
+    left_layout.setSpacing(6)
+
+    self._scn_list = QTableWidget(0, 3)
+    self._scn_list.setHorizontalHeaderLabels(["Scenario", "Result", "Steps OK"])
+    sl_header = self._scn_list.horizontalHeader()
+    sl_header.setSectionResizeMode(0, QHeaderView.Stretch)
+    sl_header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+    sl_header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+    self._scn_list.verticalHeader().setVisible(False)
+    self._scn_list.setEditTriggers(QTableWidget.NoEditTriggers)
+    self._scn_list.setSelectionBehavior(QTableWidget.SelectRows)
+    self._scn_list.setSelectionMode(QTableWidget.SingleSelection)
+    self._scn_list.setToolTip(
+      "Tick the scenarios for RUN SELECTED.\nClick a row to show its steps and description.")
+    self._scn_rows = {}                 # scenario name -> row
+    checked = self._load_checked_scenarios()
+    for row, name in enumerate(SCENARIOS):
+      self._scn_list.insertRow(row)
+      name_item = QTableWidgetItem(name)
+      name_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsUserCheckable)
+      name_item.setCheckState(Qt.Checked if name in checked else Qt.Unchecked)
+      if SCENARIOS[name].get("manual_only"):
+        name_item.setToolTip("Needs operator action (power cycle) - RUN ALL skips it, "
+                             "RUN SELECTED runs it.")
+      self._scn_list.setItem(row, 0, name_item)
+      self._scn_list.setItem(row, 1, QTableWidgetItem("-"))
+      self._scn_list.setItem(row, 2, QTableWidgetItem(""))
+      self._scn_rows[name] = row
+    self._scn_list.itemChanged.connect(self._on_scn_list_item_changed)
+    self._scn_list.currentCellChanged.connect(self._on_scn_list_current_changed)
+    left_layout.addWidget(self._scn_list, 1)
+
+    check_row = QHBoxLayout()
+    self._btn_scn_check_all = QPushButton("Check All")
+    self._btn_scn_check_all.clicked.connect(lambda: self._set_all_scenarios_checked(True))
+    check_row.addWidget(self._btn_scn_check_all)
+    self._btn_scn_clear_all = QPushButton("Clear All")
+    self._btn_scn_clear_all.clicked.connect(lambda: self._set_all_scenarios_checked(False))
+    check_row.addWidget(self._btn_scn_clear_all)
+    self._chk_random_order = QCheckBox("Random order")
+    self._chk_random_order.setToolTip(
+      "Shuffle scenario order using a time-based seed.\n"
+      "Each run uses a different shuffle.")
+    check_row.addWidget(self._chk_random_order)
+    check_row.addStretch()
+    self._lbl_scn_checked = QLabel("")
+    self._lbl_scn_checked.setObjectName("val")
+    check_row.addWidget(self._lbl_scn_checked)
+    left_layout.addLayout(check_row)
+    h_split.addWidget(left_w)
+
+    # ---- Right pane: description, steps, hints ----
+    right_w = QWidget()
+    right_layout = QVBoxLayout(right_w)
+    right_layout.setContentsMargins(0, 0, 0, 0)
+    right_layout.setSpacing(6)
+
+    self._lbl_scenario_name = QLabel("")
+    self._lbl_scenario_name.setStyleSheet("font-weight: bold;")
+    right_layout.addWidget(self._lbl_scenario_name)
+
     self._lbl_scenario_desc = QTextEdit()
     self._lbl_scenario_desc.setReadOnly(True)
     self._lbl_scenario_desc.setMaximumHeight(100)
     self._lbl_scenario_desc.setStyleSheet(
       "QTextEdit { background: #0f172a; color: #f1f5f9; font-size: 11px; border: 1px solid #334155; }")
-    layout.addWidget(self._lbl_scenario_desc)
+    right_layout.addWidget(self._lbl_scenario_desc)
 
-    # Vertical splitter for table and hints box
-    splitter = QSplitter(Qt.Vertical)
-    layout.addWidget(splitter)
+    v_split = QSplitter(Qt.Vertical)
+    right_layout.addWidget(v_split, 1)
 
-    # Upper container (table, progress, summary, buttons, rand_row)
-    upper_w = QWidget()
-    upper_layout = QVBoxLayout(upper_w)
-    upper_layout.setContentsMargins(0, 0, 0, 0)
-    upper_layout.setSpacing(6)
+    steps_w = QWidget()
+    steps_layout = QVBoxLayout(steps_w)
+    steps_layout.setContentsMargins(0, 0, 0, 0)
+    steps_layout.setSpacing(6)
 
-    # Step table
     self._scenario_table = ScenarioTableWidget(0, 4)
     self._scenario_table.setHorizontalHeaderLabels(["#", "Label", "Result", "Latency"])
     header = self._scenario_table.horizontalHeader()
     header.setSectionResizeMode(QHeaderView.Interactive)
     self._scenario_table.setColumnWidth(0, 45)
-    self._scenario_table.setColumnWidth(1, 840)
+    self._scenario_table.setColumnWidth(1, 500)
     self._scenario_table.setColumnWidth(2, 160)
     self._scenario_table.setColumnWidth(3, 90)
     self._scenario_table.verticalHeader().setVisible(False)
     self._scenario_table.setEditTriggers(QTableWidget.NoEditTriggers)
-    self._scenario_table.setAlternatingRowColors(True)
-    upper_layout.addWidget(self._scenario_table)
+    steps_layout.addWidget(self._scenario_table)
 
-    # Progress bar
     self._scenario_progress = QProgressBar()
     self._scenario_progress.setValue(0)
     self._scenario_progress.setTextVisible(True)
@@ -2045,68 +2120,14 @@ class HartMasterSim(QMainWindow):
       "QProgressBar { border: 1px solid #334155; background: #0f172a; color: #f1f5f9; height: 16px; }"
       "QProgressBar::chunk { background: #8D49B2; }"
     )
-    upper_layout.addWidget(self._scenario_progress)
+    steps_layout.addWidget(self._scenario_progress)
 
-    # Summary label
+    # Per-scenario summary (the scenario currently shown / running)
     self._lbl_scenario_summary = QLabel("Ready")
     self._lbl_scenario_summary.setAlignment(Qt.AlignCenter)
-    upper_layout.addWidget(self._lbl_scenario_summary)
+    steps_layout.addWidget(self._lbl_scenario_summary)
+    v_split.addWidget(steps_w)
 
-    # Buttons
-    btn_row = QHBoxLayout()
-    self._btn_scenario_run = QPushButton("▶  RUN SCENARIO")
-    self._btn_scenario_run.setObjectName("btn_send")
-    self._btn_scenario_run.clicked.connect(self._run_scenario)
-    btn_row.addWidget(self._btn_scenario_run)
-
-    self._btn_scenario_run_all = QPushButton("▶▶  RUN ALL")
-    self._btn_scenario_run_all.setObjectName("btn_send")
-    self._btn_scenario_run_all.clicked.connect(self._run_all_scenarios)
-    btn_row.addWidget(self._btn_scenario_run_all)
-
-    self._btn_scenario_abort = QPushButton("■  ABORT")
-    self._btn_scenario_abort.setObjectName("btn_disconnect")
-    self._btn_scenario_abort.setEnabled(False)
-    self._btn_scenario_abort.clicked.connect(self._abort_scenario)
-    btn_row.addWidget(self._btn_scenario_abort)
-
-    upper_layout.addLayout(btn_row)
-
-    # Random order option + run-all progress label
-    rand_row = QHBoxLayout()
-    self._chk_random_order = QCheckBox("Random order")
-    self._chk_random_order.setToolTip(
-      "Shuffle scenario order using a time-based seed.\n"
-      "Each Run All session uses a different shuffle.")
-    rand_row.addWidget(self._chk_random_order)
-    rand_row.addStretch()
-    self._lbl_run_all_progress = QLabel("")
-    self._lbl_run_all_progress.setObjectName("val")
-    rand_row.addWidget(self._lbl_run_all_progress)
-    upper_layout.addLayout(rand_row)
-
-    # Run All overall verdict (hidden until the first Run All)
-    self._lbl_run_all_summary = QLabel("")
-    self._lbl_run_all_summary.setAlignment(Qt.AlignCenter)
-    self._lbl_run_all_summary.setVisible(False)
-    upper_layout.addWidget(self._lbl_run_all_summary)
-
-    splitter.addWidget(upper_w)
-
-    # Run All per-scenario results (hidden until the first Run All)
-    self._run_all_table = QTableWidget(0, 3)
-    self._run_all_table.setHorizontalHeaderLabels(["Scenario", "Result", "Steps OK"])
-    ra_header = self._run_all_table.horizontalHeader()
-    ra_header.setSectionResizeMode(0, QHeaderView.Stretch)
-    ra_header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-    ra_header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-    self._run_all_table.verticalHeader().setVisible(False)
-    self._run_all_table.setEditTriggers(QTableWidget.NoEditTriggers)
-    self._run_all_table.setAlternatingRowColors(True)
-    self._run_all_table.setVisible(False)
-    splitter.addWidget(self._run_all_table)
-
-    # Diagnostic hints box
     self._scenario_hints = QTextEdit()
     self._scenario_hints.setReadOnly(True)
     self._scenario_hints.setStyleSheet(
@@ -2115,19 +2136,103 @@ class HartMasterSim(QMainWindow):
     palette.setColor(QPalette.PlaceholderText, QColor("#d0d064"))
     self._scenario_hints.setPalette(palette)
     self._scenario_hints.setPlaceholderText("Diagnostic hints will appear here as steps run…")
-    splitter.addWidget(self._scenario_hints)
+    v_split.addWidget(self._scenario_hints)
+    v_split.setStretchFactor(0, 1)
+    v_split.setStretchFactor(1, 0)
 
-    splitter.setStretchFactor(0, 1)
-    splitter.setStretchFactor(1, 0)
-    splitter.setStretchFactor(2, 0)
+    h_split.addWidget(right_w)
+    h_split.setStretchFactor(0, 0)
+    h_split.setStretchFactor(1, 1)
+    h_split.setSizes([480, 980])
 
-    # Init description
-    self._on_scenario_changed(0)
+    # ---- Bottom: run buttons, options, overall verdict ----
+    btn_row = QHBoxLayout()
+    self._btn_scenario_run = QPushButton("▶  RUN SELECTED")
+    self._btn_scenario_run.setObjectName("btn_send")
+    self._btn_scenario_run.setToolTip("Run the ticked scenarios (including manual ones).")
+    self._btn_scenario_run.clicked.connect(self._run_selected_scenarios)
+    btn_row.addWidget(self._btn_scenario_run)
+
+    self._btn_scenario_run_all = QPushButton("▶▶  RUN ALL")
+    self._btn_scenario_run_all.setObjectName("btn_send")
+    self._btn_scenario_run_all.setToolTip(
+      "Run every scenario except the manual (power-cycle) ones.")
+    self._btn_scenario_run_all.clicked.connect(self._run_all_scenarios)
+    btn_row.addWidget(self._btn_scenario_run_all)
+
+    self._btn_scenario_abort = QPushButton("■  ABORT")
+    self._btn_scenario_abort.setObjectName("btn_disconnect")
+    self._btn_scenario_abort.setEnabled(False)
+    self._btn_scenario_abort.clicked.connect(self._abort_scenario)
+    btn_row.addWidget(self._btn_scenario_abort)
+    layout.addLayout(btn_row)
+
+    # Overall verdict of the last RUN SELECTED / RUN ALL
+    self._lbl_run_all_summary = QLabel("")
+    self._lbl_run_all_summary.setAlignment(Qt.AlignCenter)
+    self._lbl_run_all_summary.setVisible(False)
+    layout.addWidget(self._lbl_run_all_summary)
+
+    self._update_checked_count()
+    self._scn_list.setCurrentCell(0, 0)
+    self._show_scenario(next(iter(SCENARIOS)))
     return w
 
-  def _on_scenario_changed(self, idx):
-    name = self._cb_scenario.currentText()
+  # --- scenario list / settings ---
+
+  def _load_settings(self) -> dict:
+    try:
+      with open(self.SETTINGS_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+      return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+      return {}
+
+  def _load_checked_scenarios(self) -> set:
+    names = self._load_settings().get("checked_scenarios", [])
+    return {n for n in names if isinstance(n, str)}
+
+  def _save_checked_scenarios(self):
+    data = self._load_settings()
+    data["checked_scenarios"] = self._checked_scenarios()
+    try:
+      with open(self.SETTINGS_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    except OSError as e:
+      print(f"Failed to save settings: {e}")
+
+  def _checked_scenarios(self) -> list:
+    """Ticked scenario names, in list order."""
+    return [name for name, row in self._scn_rows.items()
+            if self._scn_list.item(row, 0).checkState() == Qt.Checked]
+
+  def _set_all_scenarios_checked(self, checked: bool):
+    self._scn_list.blockSignals(True)
+    for row in self._scn_rows.values():
+      self._scn_list.item(row, 0).setCheckState(Qt.Checked if checked else Qt.Unchecked)
+    self._scn_list.blockSignals(False)
+    self._update_checked_count()
+    self._save_checked_scenarios()
+
+  def _on_scn_list_item_changed(self, item):
+    if item.column() == 0:
+      self._update_checked_count()
+      self._save_checked_scenarios()
+
+  def _update_checked_count(self):
+    self._lbl_scn_checked.setText(f"{len(self._checked_scenarios())}/{len(SCENARIOS)} checked")
+
+  def _on_scn_list_current_changed(self, row, col, prev_row, prev_col):
+    # While a run is active the details pane follows the running scenario
+    if self._run_all_active or row < 0:
+      return
+    self._show_scenario(self._scn_list.item(row, 0).text())
+
+  def _show_scenario(self, name: str):
+    """Fill the details pane (description + step table) for `name`."""
+    self._shown_scenario = name
     sc = SCENARIOS.get(name, {})
+    self._lbl_scenario_name.setText(name)
     self._lbl_scenario_desc.setPlainText(sc.get("description", ""))
     steps = sc.get("steps", [])
     self._scenario_table.setRowCount(len(steps))
@@ -2140,13 +2245,35 @@ class HartMasterSim(QMainWindow):
       self._scenario_table.setItem(i, 3, QTableWidgetItem("-"))
     self._scenario_progress.setValue(0)
     self._scenario_progress.setMaximum(max(len(steps), 1))
-    self._lbl_scenario_summary.setText(f"{len(steps)} steps - press RUN to start")
+    self._lbl_scenario_summary.setText(f"{len(steps)} steps")
+    self._lbl_scenario_summary.setStyleSheet("")
     self._scenario_hints.clear()
 
+  def _set_scn_result(self, name: str, result: str, steps: str, color: str):
+    row = self._scn_rows.get(name)
+    if row is None:
+      return
+    res_item = self._scn_list.item(row, 1)
+    res_item.setText(result)
+    res_item.setForeground(QColor(color))
+    self._scn_list.item(row, 2).setText(steps)
+    self._scn_list.scrollToItem(res_item)
+
+  def _set_run_buttons(self, running: bool):
+    self._btn_scenario_run.setEnabled(not running)
+    self._btn_scenario_run_all.setEnabled(not running)
+    self._btn_scenario_abort.setEnabled(running)
+
+  # --- running ---
+
   def _start_runner(self, name: str, steps: list, done_slot):
-    """Create and start a ScenarioRunner for `steps` (shared by Run / Run All)."""
-    self._on_scenario_changed(self._cb_scenario.currentIndex())
-    self._scenario_hints.clear()
+    """Create and start a ScenarioRunner for one scenario of the batch."""
+    self._show_scenario(name)
+    row = self._scn_rows.get(name)
+    if row is not None:
+      self._scn_list.blockSignals(True)
+      self._scn_list.setCurrentCell(row, 0)
+      self._scn_list.blockSignals(False)
     self._active_steps = list(steps)
 
     self._scenario_runner = ScenarioRunner(
@@ -2165,51 +2292,51 @@ class HartMasterSim(QMainWindow):
 
     self._scenario_progress.setMaximum(len(steps))
     self._scenario_progress.setValue(0)
-    self._btn_scenario_run.setEnabled(False)
-    self._btn_scenario_run_all.setEnabled(False)
-    self._btn_scenario_abort.setEnabled(True)
+    self._set_run_buttons(True)
     self._lbl_scenario_summary.setText(f"Running: {name}")
     self._scenario_runner.start()
 
-  def _run_scenario(self):
-    if not self._connected:
-      self._log_info("Not connected - cannot run scenario")
-      return
-    if not self._worker._port or not self._worker._port.is_open:
-      self._log_info("Port not open")
-      return
-
-    name = self._cb_scenario.currentText()
-    sc = SCENARIOS.get(name, {})
-    steps = sc.get("steps", [])
-    if not steps:
-      return
-
-    self._log_info(f"\n\n═══ SCENARIO START: {name} ═══")
-    self._start_runner(name, steps, self._on_scenario_done)
-
-  def _run_all_scenarios(self):
+  def _port_ready(self) -> bool:
     if not self._connected:
       self._log_info("Not connected - cannot run scenarios")
-      return
+      return False
     if not self._worker._port or not self._worker._port.is_open:
       self._log_info("Port not open")
+      return False
+    return True
+
+  def _run_selected_scenarios(self):
+    names = self._checked_scenarios()
+    if not names:
+      self._log_info("No scenarios checked - tick one or more in the scenario list")
+      return
+    self._run_batch("RUN SELECTED", names, [])
+
+  def _run_all_scenarios(self):
+    names = [n for n in SCENARIOS if not SCENARIOS[n].get("manual_only")]
+    skipped = [n for n in SCENARIOS if SCENARIOS[n].get("manual_only")]
+    self._run_batch("RUN ALL", names, skipped)
+
+  def _run_batch(self, title: str, names: list, skipped: list):
+    """Run `names` one after another; `skipped` are listed but not run."""
+    if not self._port_ready():
       return
 
     import random
-    names = [n for n in SCENARIOS.keys() if not SCENARIOS[n].get("manual_only")]
-    skipped = [n for n in SCENARIOS.keys() if SCENARIOS[n].get("manual_only")]
+    names = list(names)
     if self._chk_random_order.isChecked():
       seed = int(time.time() * 1000) & 0xFFFFFFFF
-      rng = random.Random(seed)
-      rng.shuffle(names)
-      self._log_info(f"\n\n═══ RUN ALL: random order ═══")
-      self._log_info("Order: " + " → ".join(f"#{list(SCENARIOS.keys()).index(n)+1}" for n in names))
+      random.Random(seed).shuffle(names)
+      self._log_info(f"\n\n═══ {title}: random order ═══")
+      order = list(SCENARIOS.keys())
+      self._log_info("Order: " + " → ".join(f"#{order.index(n)+1}" for n in names))
     else:
-      self._log_info("\n\n═══ RUN ALL: sequential order ═══")
+      self._log_info(f"\n\n═══ {title}: sequential order ═══")
     if skipped:
-      self._log_info("Skipped (operator interaction needed, run individually): " + "; ".join(skipped))
+      self._log_info("Skipped (operator interaction needed, use RUN SELECTED): "
+                     + "; ".join(skipped))
 
+    self._run_all_title = title
     self._run_all_queue = names
     self._run_all_total = len(names)
     self._run_all_ok = 0
@@ -2218,57 +2345,40 @@ class HartMasterSim(QMainWindow):
     self._run_all_active = True
     self._run_all_results = []          # (name, verdict, ok_steps, total_steps)
 
-    # Per-scenario results table: one row per scenario, in run order
-    self._run_all_table.setRowCount(0)
+    # Results column: clear everything, mark what this run will do
+    for n in SCENARIOS:
+      self._set_scn_result(n, "", "", "#94a3b8")
     for n in names:
-      self._run_all_add_row(n, "-", "", "#94a3b8")
+      self._set_scn_result(n, "queued", "", "#94a3b8")
     for n in skipped:
-      self._run_all_add_row(n, "SKIPPED (manual)", "", "#94a3b8")
-    self._run_all_table.setVisible(True)
+      self._set_scn_result(n, "SKIPPED (manual)", "", "#94a3b8")
     self._lbl_run_all_summary.setVisible(True)
     self._update_run_all_summary()
 
-    self._btn_scenario_run.setEnabled(False)
-    self._btn_scenario_run_all.setEnabled(False)
-    self._btn_scenario_abort.setEnabled(True)
+    self._set_run_buttons(True)
     self._advance_run_all()
 
-  def _run_all_add_row(self, name: str, result: str, steps: str, color: str):
-    row = self._run_all_table.rowCount()
-    self._run_all_table.insertRow(row)
-    self._run_all_table.setItem(row, 0, QTableWidgetItem(name))
-    self._run_all_table.setItem(row, 1, QTableWidgetItem(result))
-    self._run_all_table.setItem(row, 2, QTableWidgetItem(steps))
-    self._run_all_table.item(row, 1).setForeground(QColor(color))
-
-  def _run_all_set_row(self, name: str, result: str, steps: str, color: str):
-    for row in range(self._run_all_table.rowCount()):
-      if self._run_all_table.item(row, 0).text() == name:
-        res_item = self._run_all_table.item(row, 1)
-        res_item.setText(result)
-        res_item.setForeground(QColor(color))
-        self._run_all_table.item(row, 2).setText(steps)
-        self._run_all_table.scrollToItem(res_item)
-        return
-
   def _update_run_all_summary(self, final: bool = False, aborted: bool = False):
-    """Overall Run All verdict: PASS only if every scenario ran with zero failed steps."""
+    """Overall verdict: PASS only if every scenario ran with zero failed steps."""
+    title = getattr(self, "_run_all_title", "RUN ALL")
     done = self._run_all_ok + self._run_all_fail
     total = self._run_all_total
     if aborted:
-      text = (f"RUN ALL: ABORTED - {done}/{total} scenarios run, "
+      text = (f"{title}: ABORTED - {done}/{total} scenarios run, "
               f"{self._run_all_ok} PASS, {self._run_all_fail} FAIL")
       color = "#fbbf24"
     elif final:
       if self._run_all_fail == 0:
-        text = f"RUN ALL: PASS - {self._run_all_ok}/{total} scenarios passed"
+        text = f"{title}: PASS - {self._run_all_ok}/{total} scenarios passed"
         color = "#4ade80"
       else:
-        text = (f"RUN ALL: FAIL - {self._run_all_fail}/{total} scenarios failed, "
+        text = (f"{title}: FAIL - {self._run_all_fail}/{total} scenarios failed, "
                 f"{self._run_all_ok} passed")
         color = "#f87171"
     else:
-      text = (f"RUN ALL: running {min(done + 1, total)}/{total} - "
+      current = self._run_all_current
+      scn = f"Scenario {current.split(' - ')[0]}; " if current else ""
+      text = (f"{title}: {scn}running {min(done + 1, total)}/{total} - "
               f"{self._run_all_ok} PASS, {self._run_all_fail} FAIL")
       color = "#f87171" if self._run_all_fail else "#e2e8f0"
     self._lbl_run_all_summary.setText(text)
@@ -2289,38 +2399,29 @@ class HartMasterSim(QMainWindow):
       self._run_all_active = False
       summary = self._update_run_all_summary(final=True)
       self._log_run_all_results(summary)
-      self._lbl_run_all_progress.setText("")
-      self._btn_scenario_run.setEnabled(True)
-      self._btn_scenario_run_all.setEnabled(True)
-      self._btn_scenario_abort.setEnabled(False)
+      self._set_run_buttons(False)
       return
 
     name = self._run_all_queue.pop(0)
     self._run_all_current = name
     remaining = len(self._run_all_queue)
     current = self._run_all_total - remaining
-    self._lbl_run_all_progress.setText(f"Scenario {current}/{self._run_all_total}")
-    self._run_all_set_row(name, "⏳ running", "", "#fbbf24")
-    self._update_run_all_summary()
 
-    # Select scenario in combo for visual feedback
-    idx = self._cb_scenario.findText(name)
-    if idx >= 0:
-      self._cb_scenario.setCurrentIndex(idx)
-
-    sc = SCENARIOS.get(name, {})
-    steps = sc.get("steps", [])
+    steps = SCENARIOS.get(name, {}).get("steps", [])
     if not steps:
       self._run_all_total -= 1
-      self._run_all_set_row(name, "SKIPPED (no steps)", "", "#94a3b8")
+      self._run_all_current = None
+      self._set_scn_result(name, "SKIPPED (no steps)", "", "#94a3b8")
       self._advance_run_all()
       return
 
+    self._set_scn_result(name, "⏳ running", "", "#fbbf24")
+    self._update_run_all_summary()
     self._log_info(f"\n\n═══ SCENARIO START [{current}/{self._run_all_total}]: {name} ═══")
     self._start_runner(name, steps, self._on_run_all_step_done)
 
   def _on_run_all_step_done(self, ok_count: int, fail_count: int):
-    """Called after each scenario completes during Run All."""
+    """Called after each scenario of the batch completes."""
     name = self._run_all_current
     self._run_all_current = None
     total_steps = len(getattr(self, "_active_steps", []) or [])
@@ -2329,7 +2430,7 @@ class HartMasterSim(QMainWindow):
       # Aborted mid-scenario: record it but don't count it as PASS/FAIL
       self._run_all_active = False
       if name:
-        self._run_all_set_row(name, "ABORTED", steps_txt, "#fbbf24")
+        self._set_scn_result(name, "ABORTED", steps_txt, "#fbbf24")
         self._run_all_results.append((name, "ABORTED", ok_count, total_steps))
       self._on_scenario_done(ok_count, fail_count)
       self._lbl_scenario_summary.setText("Aborted")
@@ -2342,26 +2443,22 @@ class HartMasterSim(QMainWindow):
     else:
       self._run_all_fail += 1
     if name:
-      self._run_all_set_row(name, "✓ PASS" if passed else "✗ FAIL", steps_txt,
-                            "#4ade80" if passed else "#f87171")
+      self._set_scn_result(name, "✓ PASS" if passed else "✗ FAIL", steps_txt,
+                           "#4ade80" if passed else "#f87171")
       self._run_all_results.append((name, "PASS" if passed else "FAIL",
                                     ok_count, total_steps))
     self._on_scenario_done(ok_count, fail_count)
     # _on_scenario_done re-enables the buttons; keep them locked between scenarios
-    self._btn_scenario_run.setEnabled(False)
-    self._btn_scenario_run_all.setEnabled(False)
-    self._btn_scenario_abort.setEnabled(True)
-    self._update_run_all_summary()
+    self._set_run_buttons(True)
+    # Summary line is refreshed when the next scenario starts (or with the final
+    # verdict), so it never shows a "running" line without a scenario number
     QTimer.singleShot(self.RUN_ALL_GAP_MS, self._advance_run_all)
 
   def _abort_scenario(self):
     if self._scenario_runner:
       self._scenario_runner.abort()
-    self._btn_scenario_run.setEnabled(True)
-    self._btn_scenario_run_all.setEnabled(True)
-    self._btn_scenario_abort.setEnabled(False)
+    self._set_run_buttons(False)
     self._lbl_scenario_summary.setText("Aborted")
-    self._lbl_run_all_progress.setText("")
     run_all_gap = self._run_all_active and self._run_all_current is None
     self._run_all_queue = None
     self._log_info("═══ SCENARIO ABORTED ═══")

@@ -214,15 +214,14 @@ QTableWidget {
   background: #000000;
   gridline-color: #334155;
   border: 1px solid #334155;
-  /* Add explicit background for alternating rows to prevent bright white/grey mash */
-  qproperty-alternatingRowColors: true;
+  /* Row striping is painted by StripeDelegate (hart_master_simulator.py): Qt's
+     alternatingRowColors shifts every other row when a style sheet is active. */
+  /* Same selection colours whether or not the window has focus */
+  selection-background-color: #1e3a8a;
+  selection-color: #ffffff;
 }
 QTableWidget::item {
   padding: 3px 6px;
-}
-/* Crucial fix for contrast: explicit background for alternating rows */
-QTableWidget::item:alternate {
-  background: #0f172a;
 }
 QHeaderView::section {
   background: #1e293b;

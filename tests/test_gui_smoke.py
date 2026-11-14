@@ -25,8 +25,9 @@ def app():
 
 
 @pytest.fixture
-def window(app, monkeypatch):
+def window(app, monkeypatch, tmp_path):
   monkeypatch.setattr(sim.time, "sleep", lambda s: None)
+  monkeypatch.setattr(sim.HartMasterSim, "SETTINGS_PATH", str(tmp_path / "settings.json"))
   monkeypatch.setattr(sim.ScenarioRunner, "RESPONSE_TIMEOUT_S", 0.005)
   w = sim.HartMasterSim()
   yield w
@@ -39,10 +40,11 @@ def _run_in_gui(app, w, name, slave):
   slave.is_open = True
   w._worker._port = slave
   w._connected = True
-  w._cb_scenario.setCurrentIndex(w._cb_scenario.findText(name))
-  w._run_scenario()
+  w._set_all_scenarios_checked(False)
+  w._scn_list.item(w._scn_rows[name], 0).setCheckState(sim.Qt.Checked)
+  w._run_selected_scenarios()
   deadline = time.time() + 30
-  while w._scenario_runner.isRunning() or not w._btn_scenario_run.isEnabled():
+  while w._run_all_active or w._scenario_runner.isRunning():
     app.processEvents()
     if time.time() > deadline:
       raise AssertionError("scenario did not finish")
@@ -92,7 +94,7 @@ def _run_all_in_gui(app, w, slave):
     if time.time() > deadline:
       raise AssertionError("Run All did not finish")
   app.processEvents()
-  table = w._run_all_table
+  table = w._scn_list
   return {table.item(r, 0).text(): table.item(r, 1).text() for r in range(table.rowCount())}
 
 
@@ -119,3 +121,45 @@ def test_gui_run_all_reports_fail_overall(app, window, monkeypatch):
   name12 = next(n for n in SCENARIOS if n.startswith("12 - "))
   assert rows[name12] == "✗ FAIL"
   assert window._lbl_run_all_summary.text().startswith("RUN ALL: FAIL")
+
+
+def test_gui_run_selected_runs_only_checked_scenarios(app, window, monkeypatch):
+  monkeypatch.setattr(sim.HartMasterSim, "RUN_ALL_GAP_MS", 0)
+  picked = [n for n in SCENARIOS if n.split(" - ")[0] in ("2", "5", "11")]
+  assert len(picked) == 3
+  window._set_all_scenarios_checked(False)
+  for n in picked:
+    window._scn_list.item(window._scn_rows[n], 0).setCheckState(sim.Qt.Checked)
+  slave = FakeSlave()
+  slave.is_open = True
+  window._worker._port = slave
+  window._connected = True
+  window._run_selected_scenarios()
+  seen = {window._lbl_run_all_summary.text()}
+  deadline = time.time() + 60
+  while window._run_all_active:
+    app.processEvents()
+    seen.add(window._lbl_run_all_summary.text())
+    assert time.time() < deadline, "Run Selected did not finish"
+  assert "RUN SELECTED: Scenario 2; running 1/3 - 0 PASS, 0 FAIL" in seen, seen
+  assert "RUN SELECTED: Scenario 11; running 3/3 - 2 PASS, 0 FAIL" in seen, seen
+  assert all("Scenario" in t for t in seen if "running" in t), seen
+  app.processEvents()
+  results = {n: window._scn_list.item(r, 1).text() for n, r in window._scn_rows.items()}
+  assert all(results[n] == "✓ PASS" for n in picked), results
+  assert all(results[n] == "" for n in SCENARIOS if n not in picked), results
+  assert window._lbl_run_all_summary.text() == "RUN SELECTED: PASS - 3/3 scenarios passed"
+
+
+def test_gui_checked_scenarios_are_remembered(app, window):
+  names = list(SCENARIOS)
+  window._set_all_scenarios_checked(False)
+  for n in (names[1], names[4]):
+    window._scn_list.item(window._scn_rows[n], 0).setCheckState(sim.Qt.Checked)
+  w2 = sim.HartMasterSim()          # same SETTINGS_PATH (fixture monkeypatch)
+  try:
+    assert w2._checked_scenarios() == [names[1], names[4]]
+    assert w2._lbl_scn_checked.text() == "2/%d checked" % len(names)
+  finally:
+    w2._worker.stop()
+    w2.close()
