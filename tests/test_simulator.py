@@ -86,7 +86,7 @@ def test_decode_cmd0_hart7_fields_and_long_address():
   assert d["_unique_id"] == UNIQUE_ADDR == bytes([0x27, 0x8B, 0x01, 0x23, 0x45])
   assert d["Expanded Device Type"] == "0xE78B"
   assert d["Manufacturer ID"].startswith("0x61F6")
-  assert d["Last Device Variable code"] == 0 and d["Device Profile"] == 1
+  assert d["Last Device Variable code"] == 3 and d["Device Profile"] == 1
 
 
 def test_parse_response_reads_master_and_burst_bits_from_address():
@@ -298,12 +298,12 @@ def test_ual_detects_fault(kw, step):
 
 def test_ual_cmd9_rc14_warning_accepted_but_errors_fail():
   # RC 14 (Dynamic Variables Returned for Device Variables) is a warning with
-  # full data, as the BUOS firmware answers Cmd9 for codes 0-3
-  _, fail, results = _ual()
-  assert fail == 0
-  assert any("RC 14" in r for i, lbl, ok, r in results if lbl.startswith("[3.11 UAL011]"))
+  # full data (older BUOS firmware answered Cmd9 for codes 0-3 with it)
   step = next(st for st in SCENARIOS[scenario("17")]["steps"]
               if st["label"].startswith("[3.11 UAL011] Cmd9 - slots"))
+  rc, data = FakeSlave()._command(9, bytes([0, 1, 2, 3]), 0x80)
+  raw, parsed = _resp(cmd=9, rc=14, data=data)
+  assert sim.evaluate_step(step, raw, parsed, 0, {})[0]
   raw, parsed = _resp(cmd=9, rc=2)            # an error code must still fail
   assert not sim.evaluate_step(step, raw, parsed, 0, {})[0]
 
