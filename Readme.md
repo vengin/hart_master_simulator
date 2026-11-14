@@ -8,6 +8,7 @@ Diagnostic and simulation tool for testing HART slave devices and monitoring pro
 - **Checked results**: steps can require response codes, Device Status bits, response data (also compared with earlier responses) and Config Change Counter deltas; per-master (primary/secondary) checks of Configuration Changed, Cold Start and Cmd38.
 - **Universal Command Conformance** (scenario 17, UAL 3.1-3.17): content checks via `reject_rc`, run-time `expect_rc`, `check` callables; original values saved and restored.
 - **Power-cycle scenarios** (15, 18, 19, manual): Cold Start per master (15) and NV persistence of the configuration (18) and polling address (19). The operator power-cycles the device (CyclePower). Cmd42 is not used: the HART test specifications (HCF_TEST-003 rev 5.1, HCF_TEST-004 rev 7.0) replaced every Device Reset with CyclePower. Cold Start proves the restart; original values are restored. Run All skips these scenarios.
+- **Common Practice commands**: "Common Practice" tab with every command of HCF_SPEC-151 sections 7.1-7.72 that the spec folder covers (Cmd33-59, 108, 109): request data entered as text, responses decoded (`hart_cp.py`). Scenario 20 checks the BUOS implementation (Cmd33/41/44/48/49/50/54/59; Cmd34-37, 40, 43, 45-47, 51, 108, 109 must answer RC 64) and restores the transducer serial number and preamble count.
 - **Configurable Physical Layer Parameters**: Supports adjustable preamble counts, parity selection (`8O1`), and exact 1200 baud timing.
 - **Dual-Master Simulation**: Toggle between primary master (`0x02`) and secondary master (`0x01`) roles.
 - **Robust Address Validation**: Supports both short (polling address 0) and long (unique-ID) addressing schemes.
@@ -18,6 +19,7 @@ Diagnostic and simulation tool for testing HART slave devices and monitoring pro
 - `hart_master_simulator.py`: Main PyQt5 application, serial interface worker thread, and GUI logic.
 - `scenarios.py`: Dictionary definitions containing step-by-step diagnostic test routines (step keys documented at the top of the file and in `ScenarioRunner`).
 - `hart_codec.py`: HART Packed ASCII / Date / Latin-1 encoding shared by the GUI and the scenarios.
+- `hart_cp.py`: Common Practice command table, request encoders and response decoders (Cmd33-59, 108, 109).
 - `tests/`: offline tests (no serial port): `fake_slave.py` models the HART 7 device, `test_simulator.py` runs every scenario against it and against fault-injected variants, `test_gui_smoke.py` runs scenarios through the GUI off-screen. Run with `python -m pytest -q tests`.
 - `style.qss`: StyleSheet providing unified dark theme across interface components.
 

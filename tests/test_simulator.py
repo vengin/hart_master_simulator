@@ -210,7 +210,7 @@ def test_eval_expect_no_response():
 # Scenarios against a conformant device model
 # ---------------------------------------------------------------------------
 
-STRICT = ["11", "12", "14", "15", "16", "17", "18", "19"]
+STRICT = ["11", "12", "14", "15", "16", "17", "18", "19", "20"]
 
 
 @pytest.mark.parametrize("prefix", STRICT)
@@ -222,13 +222,13 @@ def test_strict_scenario_passes_on_conformant_device(prefix):
   assert ok == len(SCENARIOS[scenario(prefix)]["steps"])
 
 
-@pytest.mark.parametrize("prefix", ["11", "12", "18", "19"])
+@pytest.mark.parametrize("prefix", ["11", "12", "18", "19", "20"])
 def test_scenario_restores_device_configuration(prefix):
   slave = FakeSlave()
   before = dict(slave.ram)
   run_scenario(scenario(prefix), slave, on_manual=lambda s: s.reset(power_cycle=True))
   after = dict(slave.ram)
-  for key in ("poll", "loop", "tag", "desc", "date", "msg", "fan", "long_tag"):
+  for key in ("poll", "loop", "tag", "desc", "date", "msg", "fan", "long_tag", "tsn", "pre"):
     assert after[key] == before[key], key
   assert after["ccflag"] == 0      # both masters' Config Changed cleared again
 
@@ -363,6 +363,13 @@ DETECTS = [
   ("11", "counter_on_rc5"),
   ("3", "wrong_master_bit"),
   ("12", "wrong_master_bit"),
+  ("20", "c33_always_4_slots"),
+  ("20", "c33_no_rc5"),
+  ("20", "c54_short"),
+  ("20", "c50_unmapped"),
+  ("20", "c44_any_unit"),
+  ("20", "c49_no_rc5"),
+  ("20", "c40_accepted"),
 ]
 
 

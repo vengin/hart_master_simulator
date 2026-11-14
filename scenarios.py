@@ -489,6 +489,152 @@ def _ual_steps():
   return S
 
 
+# ---------------------------------------------------------------------------
+# Helpers for scenario 20 (Common Practice commands)
+# ---------------------------------------------------------------------------
+CP_NAN = b"\x7f\xa0\x00\x00"
+CP_TSN = bytes([0x12, 0x34, 0x56])
+
+# Commands the BUOS does not implement (RC 64): the 4-20 mA output belongs to
+# the overspeed monitor, the Dynamic Variable mapping is fixed, no burst mode.
+# Request data is valid, so a device that implements them would answer RC 0.
+CP_NOT_IMPLEMENTED = [
+  (34, "Write PV Damping", bytes.fromhex("00000000")),
+  (35, "Write PV Range Values", bytes([57]) + bytes.fromhex("42f00000 00000000")),
+  (36, "Set PV Upper Range Value", b""),
+  (37, "Set PV Lower Range Value", b""),
+  (40, "Enter Fixed Current Mode 4 mA", bytes.fromhex("40800000")),
+  (45, "Trim Loop Current Zero (after Cmd40 4 mA)", bytes.fromhex("40800000")),
+  (40, "Enter Fixed Current Mode 20 mA", bytes.fromhex("41a00000")),
+  (46, "Trim Loop Current Gain (after Cmd40 20 mA)", bytes.fromhex("41a00000")),
+  (40, "Exit Fixed Current Mode", bytes.fromhex("00000000")),
+  (43, "Set PV Zero", b""),
+  (47, "Write PV Transfer Function (linear)", b"\x00"),
+  (51, "Write Dynamic Variable Assignments", bytes([0, 1, 2, 3])),
+  (108, "Write Burst Mode Command Number (Cmd1)", bytes([0, 1, 0])),
+  (109, "Burst Mode Control (enable)", bytes([1, 0])),
+]
+
+
+def _cp_slots(codes):
+  """Cmd33 check: exactly one 6-byte slot per requested code, codes echoed,
+  units/value of unsupported codes = 250 / NaN."""
+  def check(parsed, saved):
+    p = parsed.get("payload", b"")
+    if len(p) != 6 * len(codes):
+      return False, f"{len(p)} data bytes, expected {6 * len(codes)} (Table 5)"
+    for i, code in enumerate(codes):
+      slot = p[6 * i:6 * i + 6]
+      if slot[0] != code:
+        return False, f"slot {i}: code {slot[0]}, expected {code}"
+      if slot[1] == 250 and slot[2:6] != CP_NAN:
+        return False, f"slot {i}: units 250 but value {slot[2:6].hex(' ')} (expected NaN)"
+    return True, ""
+  return check
+
+
+def _cp_c54(code, tsn_from=None):
+  """Cmd54 check: HART 7 layout (28 bytes), code echoed, units = Cmd33 units
+  of the same variable, classification not 0 is not required (info only)."""
+  def check(parsed, saved):
+    p = parsed.get("payload", b"")
+    if len(p) != 28:
+      return False, f"{len(p)} data bytes, expected 28 (Acquisition Period, Properties)"
+    if p[0] != code:
+      return False, f"code {p[0]}, expected {code}"
+    c33 = saved.get("c33_all")
+    if c33 and code <= 3 and p[4] != c33[6 * code + 1]:
+      return False, f"units {p[4]} differ from Cmd33 units {c33[6 * code + 1]}"
+    if tsn_from is not None and p[1:4] != resolve_tsn(saved, tsn_from):
+      return False, f"transducer S/N {p[1:4].hex(' ')}, expected {resolve_tsn(saved, tsn_from).hex(' ')}"
+    info = "" if p[21] else "classification 0 (Not Yet Classified; C54 footnote 55 forbids 0)"
+    return True, info
+  return check
+
+
+def resolve_tsn(saved, ref):
+  return ref if isinstance(ref, (bytes, bytearray)) else saved[ref][0:3]
+
+
+def _cp_steps():
+  steps = [
+    _discover(),
+    _s("[Setup] Cmd0 - counter, preambles", 0, expect_rc=0, save_as="c0_before"),
+    _s("[Setup] Cmd14 - original PV transducer S/N", 14, expect_rc=0, save_as="orig14"),
+    _s("[Setup] Cmd1 - PV units", 1, expect_rc=0, save_as="c1"),
+    # ---- 7.1 Cmd33 ----
+    _s("[33] Cmd33 - 4 Device Variables 0..3", 33, bytes([0, 1, 2, 3]),
+       check=_cp_slots([0, 1, 2, 3]), save_as="c33_all"),
+    _s("[33] Cmd33 - 1 slot -> 6 bytes", 33, bytes([0]), check=_cp_slots([0])),
+    _s("[33] Cmd33 - 2 slots -> 12 bytes", 33, bytes([1, 2]), check=_cp_slots([1, 2])),
+    _s("[33] Cmd33 - 3 slots -> 18 bytes", 33, bytes([3, 244, 245]), check=_cp_slots([3, 244, 245])),
+    _s("[33] Cmd33 - PV..QV codes 246-249", 33, bytes([246, 247, 248, 249]),
+       check=_cp_slots([246, 247, 248, 249])),
+    _s("[33] Cmd33 - unsupported code -> units 250, NaN", 33, bytes([100]),
+       expect_rc=0, expect_payload=bytes([100, 250]) + CP_NAN),
+    _s("[33] Cmd33 - no request bytes -> RC 5", 33, b"", expect_rc=5),
+    # ---- 7.16 Cmd50 ----
+    _s("[50] Cmd50 - Dynamic Variable assignments", 50, expect_rc=0,
+       expect_payload=bytes([0, 1, 2, 3]),
+       note="BUOS: fixed mapping PV-QV = Device Variables 0-3."),
+    # ---- 7.20 Cmd54 ----
+    _s("[54] Cmd54 - Device Variable 0", 54, bytes([0]), check=_cp_c54(0, tsn_from="orig14")),
+    _s("[54] Cmd54 - Device Variable 1", 54, bytes([1]), check=_cp_c54(1)),
+    _s("[54] Cmd54 - Device Variable 2", 54, bytes([2]), check=_cp_c54(2)),
+    _s("[54] Cmd54 - Device Variable 3", 54, bytes([3]), check=_cp_c54(3)),
+    _s("[54] Cmd54 - code 246 (PV)", 54, bytes([246]), check=_cp_c54(246)),
+    _s("[54] Cmd54 - unsupported code -> RC 2", 54, bytes([100]), expect_rc=2),
+    _s("[54] Cmd54 - no request bytes -> RC 5", 54, b"", expect_rc=5),
+    # ---- 7.8 Cmd41 / 7.14 Cmd48 ----
+    _s("[41] Cmd41 - Perform Self-Test", 41, expect_rc=[0, 32],
+       note="Busy (RC 32) allowed while the self-test runs."),
+    _s("[41] Cmd48 - self-test results", 48, expect_rc=0, delay_pre=1.0),
+    # ---- 7.10 Cmd44 ----
+    _s("[44] Cmd44 - current PV units accepted", 44, data_from=("c1", 0, 1), expect_rc=0,
+       expect_payload=("c1", 0, 1)),
+    _s("[44] Cmd44 - units 250 (Not Used) -> RC 2", 44, bytes([250]), expect_rc=2),
+    _s("[44] Cmd44 - no request bytes -> RC 5", 44, b"", expect_rc=5),
+    _s("[44] Cmd1 - PV units unchanged", 1, expect_rc=0, payload_slice=(0, 1),
+       expect_payload=("c1", 0, 1)),
+    # ---- 7.15 Cmd49 ----
+    _s("[49] Cmd0 - counter before Cmd49", 0, expect_rc=0, save_as="c0_pre49"),
+    _s("[49] Cmd49 - write transducer S/N 0x123456", 49, CP_TSN, expect_rc=0,
+       expect_payload=CP_TSN),
+    _s("[49] Cmd0 - counter +1, Config Changed set", 0, expect_rc=0,
+       expect_status_set=ST_CONFIG_CHANGED,
+       expect_u16={"offset": CCC_OFFSET, "ref": "c0_pre49", "delta": 1}),
+    _s("[49] Cmd14 - PV transducer S/N", 14, expect_rc=0, payload_slice=(0, 3),
+       expect_payload=CP_TSN),
+    _s("[49] Cmd54 - transducer S/N of Device Variable 0", 54, bytes([0]),
+       check=_cp_c54(0, tsn_from=CP_TSN)),
+    _s("[49] Cmd49 - 2 bytes -> RC 5", 49, CP_TSN[:2], expect_rc=5),
+    # ---- 7.23 Cmd59 ----
+    _s("[59] Cmd59 - 21 preambles -> RC 3", 59, bytes([21]), expect_rc=3),
+    _s("[59] Cmd59 - 4 preambles -> RC 4", 59, bytes([4]), expect_rc=4),
+    _s("[59] Cmd59 - no request bytes -> RC 5", 59, b"", expect_rc=5),
+    _s("[59] Cmd59 - 8 preambles", 59, bytes([8]), expect_rc=0, expect_payload=bytes([8])),
+    _s("[59] Cmd0 - response preambles = 8", 0, expect_rc=0, payload_slice=(12, 13),
+       expect_payload=bytes([8])),
+  ]
+  # ---- not implemented by the BUOS ----
+  for cmd, name, data in CP_NOT_IMPLEMENTED:
+    steps.append(_s(f"[NI] Cmd{cmd} - {name} -> RC 64", cmd, data, expect_rc=64,
+                    note="BUOS: not implemented (the device would not apply it)."))
+  steps += [
+    _s("[NI] Cmd2 - device still answers, loop current not fixed", 2, expect_rc=0,
+       expect_status_clear=0x08),
+    # ---- restore ----
+    _s("[Restore] Cmd49 - original transducer S/N", 49, data_from=("orig14", 0, 3),
+       expect_rc=0, expect_payload=("orig14", 0, 3)),
+    _s("[Restore] Cmd59 - original response preambles", 59, data_from=("c0_before", 12, 13),
+       expect_rc=0, expect_payload=("c0_before", 12, 13)),
+    _s("[Restore] Cmd38 primary - clear Config Changed", 38, expect_rc=0),
+    _s("[Restore] Cmd38 secondary - clear Config Changed", 38, master="secondary",
+       expect_rc=0, delay_post=NV_SAVE_WAIT_S),
+  ]
+  return steps
+
+
 SCENARIOS = {
   "1 - Cold-Start Enumeration (Rockwell style)": {
     "description": (
@@ -1115,5 +1261,19 @@ SCENARIOS = {
       _s("Cmd38 secondary - clear Config Changed", 38, master="secondary", expect_rc=0,
          delay_post=NV_SAVE_WAIT_S),
     ]
+  },
+
+  "20 - Common Practice Command Conformance (BUOS)": {
+    "description": (
+      "Common Practice commands, HCF_SPEC-151 sections 7.1-7.72:\n"
+      "• Cmd33: 1-4 slots return exactly 6/12/18/24 bytes; unsupported = 250/NaN; RC 5\n"
+      "• Cmd50: fixed mapping 0,1,2,3   • Cmd54: 28-byte layout, units = Cmd33, RC 2/5\n"
+      "• Cmd41 + Cmd48   • Cmd44: current units only, RC 2/5\n"
+      "• Cmd49: echo, counter +1, Cmd14/Cmd54 S/N, RC 5\n"
+      "• Cmd59: RC 3/4/5, Cmd0 byte 12\n"
+      "• Cmd34-37, 40, 43, 45-47, 51, 108, 109: not implemented in the BUOS (RC 64)\n"
+      "Restores the transducer S/N and preamble count, clears Config Changed."
+    ),
+    "steps": _cp_steps()
   },
 }
