@@ -18,12 +18,24 @@ C12-C22, C38, C42). It also acts as the serial port given to ScenarioRunner.
   missing_cmd48         Cmd48 not implemented (RC 64)
   wp_not_enforced       reports write protect but still accepts writes
   cmd9_no_timestamp_pad Cmd9 slots one byte short (bad layout)
+  c33_always_4_slots    Cmd33 returns 4 slots whatever was requested (old BUOS)
+  c33_no_rc5            Cmd33 without request bytes answered RC 0 (old BUOS)
+  c54_short             Cmd54 23 bytes, no Acquisition Period/Properties (old BUOS)
+  c50_unmapped          Cmd50 returns 0,0,0,0 (old BUOS)
+  c44_any_unit          Cmd44 accepts any units code (old BUOS)
+  c49_no_rc5            Cmd49 accepts a short request (old BUOS)
+  c40_accepted          Cmd34-37/40/43/45-47/51/108/109 acknowledged although
+                        the device does not apply them (old BUOS)
 
 `write_protect=True` makes the device write protected (Cmd15 byte 15 = 1,
 writes return RC 7).
 
 Process data commands (Cmd1/2/3/8/9/14/15/48) return fixed, layout-correct
 values so the Universal Command Conformance scenario can run offline.
+
+Common Practice commands follow the BUOS firmware: Cmd33/41/44/48/49/50/54/59
+implemented; Device Variables 0-3 with the fixed mapping PV-QV = 0-3;
+Cmd34-37, 40, 43, 45-47, 51, 108, 109 not implemented (RC 64).
 """
 import copy
 import struct
@@ -41,6 +53,17 @@ PV_UNITS = 38            # Hz (Common Table 2)
 PV_VALUE = 1234.5
 LOOP_MA = 12.0
 PERCENT = 50.0
+NAN = b"\x7f\xa0\x00\x00"
+# Device Variables 0-3 (PV-QV) and standard codes: (units, value)
+DEV_VARS = {0: (PV_UNITS, PV_VALUE), 1: (PV_UNITS, 110.0), 2: (PV_UNITS, 10.0), 3: (52, 5.5),
+            244: (57, PERCENT), 245: (39, LOOP_MA)}
+ACQ_PERIOD = {0: 7, 1: 0xFFFFFFFF, 2: 0xFFFFFFFF, 3: 320}
+CP_NOT_IMPLEMENTED = (34, 35, 36, 37, 40, 43, 45, 46, 47, 51, 108, 109)
+
+
+def _dv(code):
+  """Device Variable for a code; 246-249 = PV-QV = Device Variables 0-3."""
+  return DEV_VARS.get(code - 246 if 246 <= code <= 249 else code)
 
 
 def _f(v):
@@ -83,6 +106,8 @@ class FakeSlave:
       "msg": bytes(range(40, 64)),
       "fan": bytes([0, 0, 7]),
       "long_tag": b"Ectron Back Up Overspeed Monitor",
+      "tsn": bytes(3),
+      "pre": 5,
     }
 
   def _save(self):
@@ -219,7 +244,7 @@ class FakeSlave:
   def _c0_data(self):
     r = self.ram
     return bytes([254, EXP_DEV_TYPE >> 8, EXP_DEV_TYPE & 0xFF, 5, 7, 7, 24, (5 << 3), 0]) + DEVICE_ID + \
-      bytes([5, 0, r["ccc"] >> 8, r["ccc"] & 0xFF, 0, 0x61, 0xF6, 0x61, 0xF6, 1])
+      bytes([r["pre"], 3, r["ccc"] >> 8, r["ccc"] & 0xFF, 0, 0x61, 0xF6, 0x61, 0xF6, 1])
 
   def _write(self, data, need, apply):
     if self.write_protect and "wp_not_enforced" not in self.faults:
@@ -250,14 +275,15 @@ class FakeSlave:
       slot_len = 7 if "cmd9_no_timestamp_pad" in self.faults else 8
       out = bytes([0])
       for code in data:
-        slot = bytes([code, 0, PV_UNITS]) + _f(PV_VALUE) + bytes([0xC0])
+        dv = _dv(code)
+        if dv:
+          slot = bytes([code, 0, dv[0]]) + _f(dv[1]) + bytes([0xC0])
+        else:
+          slot = bytes([code, 0, 250]) + NAN + bytes([0x30])
         out += slot[:slot_len]
-      # Like the BUOS firmware: Device Variable codes are answered with the
-      # Dynamic Variables -> RC 14 warning (data still complete)
-      rc = 0 if all(c >= 246 for c in data) else 14
-      return rc, out + bytes(4)                # + timestamp
+      return 0, out + bytes(4)                 # + timestamp
     if cmd == 14:
-      return 0, bytes([0, 0, 0, PV_UNITS]) + _f(30000.0) + _f(0.0) + _f(1.0)
+      return 0, r["tsn"] + bytes([PV_UNITS]) + _f(30000.0) + _f(0.0) + _f(1.0)
     if cmd == 15:
       wp = 1 if self.write_protect else 251    # 251 = None, as the BUOS firmware reports
       return 0, bytes([0, 0, PV_UNITS]) + _f(30000.0) + _f(0.0) + _f(0.0) + bytes([wp, 250, 0])
@@ -317,4 +343,58 @@ class FakeSlave:
       return 0, ccc
     if cmd == 42:
       return 0, b""
+    return self._common_practice(cmd, data)
+
+  def _common_practice(self, cmd, data):
+    r = self.ram
+    if cmd == 33:
+      if not data and "c33_no_rc5" not in self.faults:
+        return 5, b""
+      codes = list(data[:4])
+      if "c33_always_4_slots" in self.faults:
+        codes = (codes + [0xCC] * 4)[:4]       # stale bytes, like the old firmware
+      out = b""
+      for code in codes:
+        dv = _dv(code)
+        out += bytes([code]) + (bytes([dv[0]]) + _f(dv[1]) if dv else bytes([250]) + NAN)
+      return 0, out
+    if cmd == 41:
+      return 0, b""
+    if cmd == 44:
+      if not data:
+        return 5, b""
+      if self.write_protect:
+        return 7, b""
+      if data[0] != PV_UNITS and "c44_any_unit" not in self.faults:
+        return 2, b""
+      return 0, bytes([data[0]])
+    if cmd == 49:
+      if len(data) < 3 and "c49_no_rc5" not in self.faults:
+        return 5, b""
+      return self._write((list(data) + [0xEE] * 3)[:3], 3, lambda d: r.__setitem__("tsn", bytes(d)))
+    if cmd == 50:
+      return 0, bytes(4) if "c50_unmapped" in self.faults else bytes([0, 1, 2, 3])
+    if cmd == 54:
+      if not data:
+        return 5, b""
+      code = data[0]
+      num = code - 246 if 246 <= code <= 249 else code
+      if num not in ACQ_PERIOD:
+        return 2, b""
+      unit = DEV_VARS[num][0]
+      tsn = r["tsn"] if num == 0 else bytes(3)
+      out = bytes([code]) + tsn + bytes([unit]) + NAN + NAN + _f(0.0) + NAN + bytes([0, 250])
+      if "c54_short" in self.faults:
+        return 0, out
+      return 0, out + ACQ_PERIOD[num].to_bytes(4, "big") + bytes([0])
+    if cmd == 59:
+      if not data:
+        return 5, b""
+      if data[0] > 20:
+        return 3, b""
+      if data[0] < 5:
+        return 4, b""
+      return self._write(data, 1, lambda d: r.__setitem__("pre", d[0]))
+    if cmd in CP_NOT_IMPLEMENTED and "c40_accepted" in self.faults:
+      return 0, bytes(data)
     return 64, b""
