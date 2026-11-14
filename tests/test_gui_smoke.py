@@ -64,3 +64,18 @@ def test_gui_shows_failure_reason(app, window):
   texts = _run_in_gui(app, window, name, FakeSlave(faults={"shared_config_flag"}))
   bad = [t for t in texts if t.startswith("✗")]
   assert bad and any("expected" in t for t in bad), texts
+
+
+def test_gui_common_practice_tab_sends_encoded_requests(app, window, monkeypatch):
+  from hart_cp import CP_COMMANDS
+  sent, logged = [], []
+  monkeypatch.setattr(window, "_send_command", lambda c, d=b"", l="": sent.append((c, d)))
+  monkeypatch.setattr(window, "_log_info", lambda m, *a, **k: logged.append(m))
+  assert set(window._cp_inputs) == {c for c, l, k, d, t in CP_COMMANDS if k != "none"}
+  window._cp_inputs[33].setText("0 246")
+  window._send_cp_command(33, "Cmd33")
+  window._send_cp_command(41, "Cmd41")
+  window._cp_inputs[49].setText("not a number")
+  window._send_cp_command(49, "Cmd49")
+  assert sent == [(33, bytes([0, 246])), (41, b"")]
+  assert any("bad request data" in m for m in logged)

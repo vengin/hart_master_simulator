@@ -18,6 +18,7 @@ from PyQt5.QtGui import QFont, QColor, QPalette, QTextCursor, QFontDatabase
 
 from scenarios import SCENARIOS
 from hart_codec import encode_packed_ascii, decode_packed_ascii
+from hart_cp import CP_COMMANDS, CP_DECODERS, encode_cp_request
 
 # --- HART PROTOCOL CONSTANTS ------------------------------------------------
 
@@ -557,33 +558,6 @@ def decode_cmd48(payload: bytes) -> dict:
     lines[f"Extended status byte {i}"] = f"0x{b:02X} ({b:08b}b)"
   return lines
 
-def decode_cmd54(payload: bytes) -> dict:
-  if len(payload) < 23:
-    return {"error": f"Too short: {len(payload)} bytes (need 23)"}
-
-  dv_code = payload[0]
-  transducer_sn = (payload[1] << 16) | (payload[2] << 8) | payload[3]
-  units_code = payload[4]
-  upper_limit = struct.unpack(">f", payload[5:9])[0]
-  lower_limit = struct.unpack(">f", payload[9:13])[0]
-  damping = struct.unpack(">f", payload[13:17])[0]
-  min_span = struct.unpack(">f", payload[17:21])[0]
-  classification = payload[21]
-  family = payload[22]
-
-  return {
-    "Device Variable Code": f"{dv_code}",
-    "Transducer Serial Number": f"{transducer_sn}",
-    "Limits/Min Span Units": f"{units_code} ({UNIT_CODES.get(units_code, 'unknown')})",
-    "Upper Transducer Limit": f"{upper_limit:.4f}",
-    "Lower Transducer Limit": f"{lower_limit:.4f}",
-    "Damping Value": f"{damping:.4f} s",
-    "Minimum Span": f"{min_span:.4f}",
-    "Classification": f"{classification}",
-    "Family": f"{family}"
-  }
-
-
 def _decode_packed_ascii(data: bytes) -> str:
   """Decode HART packed-ASCII (6-bit encoding, 3 bytes -> 4 chars)."""
   return decode_packed_ascii(data)
@@ -620,11 +594,13 @@ def decode_response(cmd: int, payload: bytes) -> dict | None:
     22: decode_cmd20,   # response echoes the long tag
     38: decode_cmd38,
     48: decode_cmd48,
-    54: decode_cmd54,
     59: decode_cmd59,
   }
   fn = decoders.get(cmd)
-  return fn(payload) if fn else None
+  if fn:
+    return fn(payload)
+  cp = CP_DECODERS.get(cmd)          # Common Practice commands (hart_cp.py)
+  return cp(payload, UNIT_CODES) if cp else None
 
 
 # --- SERIAL WORKER THREAD ---------------------------------------------------
@@ -1172,6 +1148,7 @@ class HartMasterSim(QMainWindow):
     self._tabs.addTab(self._build_log_tab(), "Frame Log")
     self._tabs.addTab(self._build_scenarios_tab(), "Scenarios")
     self._tabs.addTab(self._build_decode_tab(), "Decoded Response")
+    self._tabs.addTab(self._build_common_practice_tab(), "Common Practice")
     self._tabs.addTab(self._build_custom_tab(), "Custom Frame")
     self._tabs.addTab(self._build_timing_tab(), "Timing / Stats")
     self._tabs.setUsesScrollButtons(True)
@@ -1440,6 +1417,44 @@ class HartMasterSim(QMainWindow):
     layout.addWidget(self._decode_table)
 
     return w
+
+  def _build_common_practice_tab(self):
+    """One row per Common Practice command: button + request data field.
+    Sent with the address mode selected on the left (long frame for HART 7)."""
+    w = QWidget()
+    outer = QVBoxLayout(w)
+    outer.setContentsMargins(8, 8, 8, 8)
+    outer.addWidget(QLabel("HART 7 Common Practice commands (request data, decimal):"))
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    inner = QWidget()
+    grid = QGridLayout(inner)
+    grid.setSpacing(3)
+    self._cp_inputs = {}
+    for row, (cmd, label, kind, default, tip) in enumerate(CP_COMMANDS):
+      btn = QPushButton(label)
+      btn.setFixedHeight(22)
+      grid.addWidget(btn, row, 0)
+      if kind != "none":
+        le = QLineEdit(default)
+        le.setToolTip(tip)
+        le.setPlaceholderText(tip)
+        grid.addWidget(le, row, 1)
+        self._cp_inputs[cmd] = le
+      btn.clicked.connect(lambda checked, c=cmd, l=label: self._send_cp_command(c, l))
+    grid.setColumnStretch(1, 1)
+    scroll.setWidget(inner)
+    outer.addWidget(scroll)
+    return w
+
+  def _send_cp_command(self, cmd: int, label: str):
+    le = self._cp_inputs.get(cmd)
+    try:
+      data = encode_cp_request(cmd, le.text() if le else "")
+    except (ValueError, OverflowError) as e:
+      self._log_info(f"{label}: bad request data ({e})")
+      return
+    self._send_command(cmd, data, label)
 
   def _build_custom_tab(self):
     w = QWidget()
