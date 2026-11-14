@@ -1072,7 +1072,7 @@ class ScenarioTableWidget(QTableWidget):
 class HartMasterSim(QMainWindow):
   def __init__(self):
     super().__init__()
-    self.setWindowTitle("HART Master Simulator  v1.1.3")
+    self.setWindowTitle("HART Master Simulator  v1.1.7")
     self.setMinimumSize(1400, 750)
     self.resize(1482, 860)
 

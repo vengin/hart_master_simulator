@@ -61,6 +61,15 @@ ACQ_PERIOD = {0: 7, 1: 0xFFFFFFFF, 2: 0xFFFFFFFF, 3: 320}
 CP_NOT_IMPLEMENTED = (34, 35, 36, 37, 40, 43, 45, 46, 47, 51, 108, 109)
 
 
+# Classification (Common Table 21), like the BUOS: % variables 0 (Not Yet
+# Classified), hours 70 (Time)
+CLASS = {0: 0, 1: 0, 2: 0, 3: 70}
+
+
+def _cls(code):
+  return CLASS.get(code - 246 if 246 <= code <= 249 else code, 0)
+
+
 def _dv(code):
   """Device Variable for a code; 246-249 = PV-QV = Device Variables 0-3."""
   return DEV_VARS.get(code - 246 if 246 <= code <= 249 else code)
@@ -243,7 +252,7 @@ class FakeSlave:
 
   def _c0_data(self):
     r = self.ram
-    return bytes([254, EXP_DEV_TYPE >> 8, EXP_DEV_TYPE & 0xFF, 5, 7, 7, 24, (5 << 3), 0]) + DEVICE_ID + \
+    return bytes([254, EXP_DEV_TYPE >> 8, EXP_DEV_TYPE & 0xFF, 5, 7, 7, 25, (5 << 3), 0]) + DEVICE_ID + \
       bytes([r["pre"], 3, r["ccc"] >> 8, r["ccc"] & 0xFF, 0, 0x61, 0xF6, 0x61, 0xF6, 1])
 
   def _write(self, data, need, apply):
@@ -268,7 +277,7 @@ class FakeSlave:
     if cmd == 3:
       return 0, _f(LOOP_MA) + bytes([PV_UNITS]) + _f(PV_VALUE)
     if cmd == 8:
-      return 0, bytes([0, 250, 250, 250])
+      return 0, bytes([CLASS[n] for n in range(4)])
     if cmd == 9:
       if not 1 <= len(data) <= 8:
         return 5, b""
@@ -277,7 +286,7 @@ class FakeSlave:
       for code in data:
         dv = _dv(code)
         if dv:
-          slot = bytes([code, 0, dv[0]]) + _f(dv[1]) + bytes([0xC0])
+          slot = bytes([code, _cls(code), dv[0]]) + _f(dv[1]) + bytes([0xC0])
         else:
           slot = bytes([code, 0, 250]) + NAN + bytes([0x30])
         out += slot[:slot_len]
@@ -383,7 +392,7 @@ class FakeSlave:
         return 2, b""
       unit = DEV_VARS[num][0]
       tsn = r["tsn"] if num == 0 else bytes(3)
-      out = bytes([code]) + tsn + bytes([unit]) + NAN + NAN + _f(0.0) + NAN + bytes([0, 250])
+      out = bytes([code]) + tsn + bytes([unit]) + NAN + NAN + _f(0.0) + NAN + bytes([CLASS[num], 250])
       if "c54_short" in self.faults:
         return 0, out
       return 0, out + ACQ_PERIOD[num].to_bytes(4, "big") + bytes([0])

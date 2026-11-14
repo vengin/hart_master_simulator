@@ -535,7 +535,7 @@ def _cp_slots(codes):
 
 def _cp_c54(code, tsn_from=None):
   """Cmd54 check: HART 7 layout (28 bytes), code echoed, units = Cmd33 units
-  of the same variable, classification not 0 is not required (info only)."""
+  of the same variable. Classification 0 (Not Yet Classified) is reported as info."""
   def check(parsed, saved):
     p = parsed.get("payload", b"")
     if len(p) != 28:
@@ -547,7 +547,7 @@ def _cp_c54(code, tsn_from=None):
       return False, f"units {p[4]} differ from Cmd33 units {c33[6 * code + 1]}"
     if tsn_from is not None and p[1:4] != resolve_tsn(saved, tsn_from):
       return False, f"transducer S/N {p[1:4].hex(' ')}, expected {resolve_tsn(saved, tsn_from).hex(' ')}"
-    info = "" if p[21] else "classification 0 (Not Yet Classified; C54 footnote 55 forbids 0)"
+    info = "" if p[21] else "classification 0 (Not Yet Classified)"
     return True, info
   return check
 
