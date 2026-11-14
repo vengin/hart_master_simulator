@@ -50,7 +50,7 @@ def _run_in_gui(app, w, name, slave):
   return [w._scenario_table.item(i, 2).text() for i in range(len(SCENARIOS[name]["steps"]))]
 
 
-@pytest.mark.parametrize("prefix", ["18", "12", "14"])
+@pytest.mark.parametrize("prefix", ["11", "12", "14"])
 def test_gui_runs_scenario_and_shows_results(app, window, prefix):
   name = next(n for n in SCENARIOS if n.startswith(prefix + " - "))
   texts = _run_in_gui(app, window, name, FakeSlave())
@@ -60,7 +60,7 @@ def test_gui_runs_scenario_and_shows_results(app, window, prefix):
 
 
 def test_gui_shows_failure_reason(app, window):
-  name = next(n for n in SCENARIOS if n.startswith("18 - "))
-  texts = _run_in_gui(app, window, name, FakeSlave(faults={"no_persistence"}))
+  name = next(n for n in SCENARIOS if n.startswith("12 - "))
+  texts = _run_in_gui(app, window, name, FakeSlave(faults={"shared_config_flag"}))
   bad = [t for t in texts if t.startswith("✗")]
   assert bad and any("expected" in t for t in bad), texts

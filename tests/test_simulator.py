@@ -210,7 +210,7 @@ def test_eval_expect_no_response():
 # Scenarios against a conformant device model
 # ---------------------------------------------------------------------------
 
-STRICT = ["11", "12", "14", "15", "16", "17", "18", "19", "20", "21"]
+STRICT = ["11", "12", "14", "15", "16", "17", "18", "19"]
 
 
 @pytest.mark.parametrize("prefix", STRICT)
@@ -222,7 +222,7 @@ def test_strict_scenario_passes_on_conformant_device(prefix):
   assert ok == len(SCENARIOS[scenario(prefix)]["steps"])
 
 
-@pytest.mark.parametrize("prefix", ["11", "12", "18", "19", "20", "21"])
+@pytest.mark.parametrize("prefix", ["11", "12", "18", "19"])
 def test_scenario_restores_device_configuration(prefix):
   slave = FakeSlave()
   before = dict(slave.ram)
@@ -330,11 +330,17 @@ def test_every_scenario_runs_without_io_errors(name):
   assert not [r for r in results if r[3].startswith("IO error")]
 
 
-def test_reset_scenarios_really_reset_the_device():
-  for prefix in ("15", "18", "19", "20"):
+def test_power_cycle_scenarios_never_send_cmd42():
+  # HCF_TEST-003 rev 5.1 / HCF_TEST-004 rev 7.0 replaced Device Reset (Cmd42)
+  # with CyclePower: no scenario may restart the device with Cmd42
+  for name, sc in SCENARIOS.items():
+    assert not [st for st in sc["steps"] if st.get("cmd") == 42], name
+  for prefix in ("15", "18", "19"):
+    sc = SCENARIOS[scenario(prefix)]
+    assert sc.get("manual_only"), prefix
     slave = FakeSlave()
-    run_scenario(scenario(prefix), slave)
-    assert slave.resets == 1, prefix
+    run_scenario(scenario(prefix), slave, on_manual=lambda s: s.reset(power_cycle=True))
+    assert slave.resets == 1, prefix   # exactly the operator's power cycle
 
 
 # ---------------------------------------------------------------------------
@@ -346,8 +352,6 @@ DETECTS = [
   ("18", "shared_config_flag"),
   ("18", "c38_clears_both"),
   ("18", "no_cold_start"),
-  ("21", "no_persistence"),
-  ("20", "reset_drops_last_save"),
   ("19", "no_c6_persistence"),
   ("19", "no_persistence"),
   ("12", "shared_config_flag"),
