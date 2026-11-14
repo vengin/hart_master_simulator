@@ -7,7 +7,7 @@ Diagnostic and simulation tool for testing HART slave devices and monitoring pro
 - **Diagnostic Scenarios**: Pre-configured sequences ranging from standard cold-start enumeration to stress testing and invalid command injection.
 - **Checked results**: steps can require response codes, Device Status bits, response data (also compared with earlier responses) and Config Change Counter deltas; per-master (primary/secondary) checks of Configuration Changed, Cold Start and Cmd38.
 - **Universal Command Conformance** (scenario 17, UAL 3.1-3.17): content checks via `reject_rc`, run-time `expect_rc`, `check` callables; original values saved and restored.
-- **NV persistence scenarios** (18-21): configuration written, Device Reset (Cmd42) or manual power cycle (21), read back; Cold Start proves the reset; original values restored.
+- **Power-cycle scenarios** (15, 18, 19, manual): Cold Start per master (15) and NV persistence of the configuration (18) and polling address (19). The operator power-cycles the device (CyclePower). Cmd42 is not used: the HART test specifications (HCF_TEST-003 rev 5.1, HCF_TEST-004 rev 7.0) replaced every Device Reset with CyclePower. Cold Start proves the restart; original values are restored. Run All skips these scenarios.
 - **Configurable Physical Layer Parameters**: Supports adjustable preamble counts, parity selection (`8O1`), and exact 1200 baud timing.
 - **Dual-Master Simulation**: Toggle between primary master (`0x02`) and secondary master (`0x01`) roles.
 - **Robust Address Validation**: Supports both short (polling address 0) and long (unique-ID) addressing schemes.

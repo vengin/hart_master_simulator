@@ -34,13 +34,11 @@ NV_C18       = NV_TAG + NV_DESC + NV_DATE
 NV_MSG       = encode_packed_ascii("HART NV PERSISTENCE TEST MESSAGE", 24)
 NV_FAN       = bytes([0x12, 0x34, 0x56])
 NV_LONG_TAG  = encode_latin1("Ectron NV persistence test tag", 32)
-TORN_C18     = encode_packed_ascii("TORNTEST", 6) + encode_packed_ascii("RESET IN SAVE", 12) + encode_date(14, 11, 2026)
 WRONG_TAG    = encode_packed_ascii("NOSUCHTG", 6)
 
 # Time for the device to store a change in EEPROM (HART NV writer: <= 1 byte per
-# main-loop pass, up to 5 ms each) and to boot after a Device Reset.
+# main-loop pass, up to 5 ms each).
 NV_SAVE_WAIT_S = 1.5
-RESET_BOOT_WAIT_S = 3.0
 
 
 def _s(label, cmd, data=b"", **kw):
@@ -57,8 +55,18 @@ def _discover(note="Short-frame Cmd0 at the configured polling address: learns t
           "delay_pre": 0.5, "delay_post": 0.3, "expect_rc": 0, "note": note}
 
 
+def _cycle_power(note=""):
+  """Operator step: CyclePower (HCF_TEST-003 rev 5.1 / HCF_TEST-004 rev 7.0
+  Annex A.1). The test specifications replaced every Device Reset (Cmd42)
+  with a power cycle, so the scenarios do not send Cmd42."""
+  text = ("Remove power from the device for at least 5 seconds, restore power and "
+          "wait until it has booted (about 3 s).")
+  return {"label": "Operator: power-cycle the device (CyclePower)",
+          "manual": text + (" " + note if note else ""), "delay_post": 1.0}
+
+
 def _after_reset(label, master="primary", **kw):
-  """First Cmd0 after a Device Reset / power cycle: retried until the device
+  """First Cmd0 after a power cycle: retried until the device
   has booted; Cold Start must be set for this master (proves the reset)."""
   kw.setdefault("expect_status_set", 0)
   kw["expect_status_set"] |= ST_COLD_START
@@ -957,19 +965,19 @@ SCENARIOS = {
     ]
   },
 
-  "15 - Cold Start per Master after Device Reset (Cmd42)": {
+  "15 - Cold Start per Master after Power Cycle (manual)": {
+    "manual_only": True,
     "description": (
-      "HART 7.3.3: one Cold Start bit per master, both set at power-up/reset;\n"
+      "HART 7.3.3: one Cold Start bit per master, both set at power-up;\n"
       "the first response to each master clears that master's bit only.\n"
-      "• Cmd42 Device Reset, wait for reboot\n"
+      "• operator power-cycles the device (CyclePower)\n"
       "• primary: 1st Cmd0 Cold Start set, 2nd clear\n"
       "• secondary: 1st Cmd0 Cold Start still set, 2nd clear\n"
       "Diagnoses: single shared Cold Start bit, bit never set, bit never cleared."
     ),
     "steps": [
       _discover(),
-      _s("Cmd42 - Device Reset", 42, expect_rc=0, delay_post=RESET_BOOT_WAIT_S,
-         note="Device must answer first, then reset."),
+      _cycle_power(),
       _after_reset("Cmd0 primary - Cold Start set"),
       _s("Cmd0 primary - Cold Start clear", 0, expect_rc=0, expect_status_clear=ST_COLD_START),
       _s("Cmd0 secondary - Cold Start still set", 0, master="secondary", expect_rc=0,
@@ -1012,16 +1020,17 @@ SCENARIOS = {
     "steps": _ual_steps()
   },
 
-  "18 - NV Persistence across Device Reset (Cmd42)": {
+  "18 - NV Persistence across Power Cycle (manual)": {
+    "manual_only": True,
     "description": (
-      "HART 7 configuration must survive a Device Reset (and power loss):\n"
+      "HART 7 configuration must survive a power loss (CyclePower):\n"
       "• read originals (Cmd12/13/16/20), write new Message, Tag/Descriptor/Date,\n"
       "  Final Assembly Number and Long Tag (Cmd17/18/19/22)\n"
       "• Config Change Counter +4, Config Changed set for both masters\n"
       "• primary clears its Config Changed bit with Cmd38\n"
-      "• Cmd42 Device Reset; Cold Start set after reboot proves the reset\n"
-      "• after reboot: all values, the counter and the per-master Config Changed\n"
-      "  bits (primary clear, secondary set) must be as before the reset\n"
+      "• operator power-cycles the device; Cold Start set proves the restart\n"
+      "• after power-up: all values, the counter and the per-master Config Changed\n"
+      "  bits (primary clear, secondary set) must be as before\n"
       "• originals restored at the end (the counter keeps counting)"
     ),
     "steps": [
@@ -1045,12 +1054,12 @@ SCENARIOS = {
       _s("Cmd0 secondary - Config Changed still set", 0, master="secondary", expect_rc=0,
          expect_status_set=ST_CONFIG_CHANGED, delay_post=NV_SAVE_WAIT_S,
          note="Then wait for the EEPROM save to finish."),
-      _s("Cmd42 - Device Reset", 42, expect_rc=0, delay_post=RESET_BOOT_WAIT_S),
-      _after_reset("Cmd0 primary after reset - counter, Config Changed clear",
+      _cycle_power(),
+      _after_reset("Cmd0 primary after power-up - counter, Config Changed clear",
                    expect_status_clear=ST_CONFIG_CHANGED,
                    expect_u16={"offset": CCC_OFFSET, "ref": "c0_written", "delta": 0},
-                   note="Cold Start set = the device really rebooted (RAM was cleared)."),
-      _after_reset("Cmd0 secondary after reset - Config Changed still set", master="secondary",
+                   note="Cold Start set = the device really restarted (RAM was cleared)."),
+      _after_reset("Cmd0 secondary after power-up - Config Changed still set", master="secondary",
                    expect_status_set=ST_CONFIG_CHANGED,
                    expect_u16={"offset": CCC_OFFSET, "ref": "c0_written", "delta": 0}),
       _s("Cmd12 - message persisted", 12, expect_rc=0, expect_payload=NV_MSG),
@@ -1067,14 +1076,15 @@ SCENARIOS = {
     ]
   },
 
-  "19 - NV Persistence of Polling Address (Cmd6)": {
+  "19 - NV Persistence of Polling Address (Cmd6, manual)": {
+    "manual_only": True,
     "description": (
-      "Cmd6 polling address and loop current mode must survive a Device Reset.\n"
-      "Cmd6/Cmd7/Cmd42 use the long address, so the scenario can always restore\n"
+      "Cmd6 polling address and loop current mode must survive a power cycle.\n"
+      "Cmd6/Cmd7 use the long address, so the scenario can always restore\n"
       "the original address even if a step fails.\n"
       "• Cmd6 -> polling address 5 (loop current mode kept enabled)\n"
       "• device answers at 5, not at the configured address\n"
-      "• Cmd42 reset: still at 5 after reboot; Cmd7 reads 5\n"
+      "• power cycle: still at 5 after power-up; Cmd7 reads 5\n"
       "• original address restored"
     ),
     "steps": [
@@ -1087,12 +1097,12 @@ SCENARIOS = {
       {"label": "Cmd0 short configured addr - silent", "cmd": 0, "data": b"", "use_long": False,
        "preambles": 5, "master": "primary", "delay_pre": 0.3, "delay_post": NV_SAVE_WAIT_S,
        "expect_no_response": True},
-      _s("Cmd42 - Device Reset", 42, expect_rc=0, delay_post=RESET_BOOT_WAIT_S),
-      {"label": "Cmd0 short addr 5 after reset - answers, Cold Start", "cmd": 0, "data": b"",
+      _cycle_power(),
+      {"label": "Cmd0 short addr 5 after power-up - answers, Cold Start", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 5, "master": "primary", "_addr": 5,
        "delay_pre": 0.3, "delay_post": 0.3, "expect_rc": 0,
        "expect_status_set": ST_COLD_START, "retries": 20, "retry_delay": 0.5},
-      {"label": "Cmd0 short configured addr after reset - silent", "cmd": 0, "data": b"",
+      {"label": "Cmd0 short configured addr after power-up - silent", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 5, "master": "primary", "delay_pre": 0.3,
        "delay_post": 0.3, "expect_no_response": True},
       _s("Cmd7 - polling address 5 persisted", 7, expect_rc=0, expect_payload=b"\x05\x01"),
@@ -1101,70 +1111,6 @@ SCENARIOS = {
       {"label": "Cmd0 short configured addr - answers again", "cmd": 0, "data": b"",
        "use_long": False, "preambles": 5, "master": "primary", "delay_pre": 0.3,
        "delay_post": 0.3, "expect_rc": 0},
-      _s("Cmd38 primary - clear Config Changed", 38, expect_rc=0),
-      _s("Cmd38 secondary - clear Config Changed", 38, master="secondary", expect_rc=0,
-         delay_post=NV_SAVE_WAIT_S),
-    ]
-  },
-
-  "20 - NV: Device Reset right after a write": {
-    "description": (
-      "Cmd42 sent immediately after an acknowledged Cmd18, while the EEPROM\n"
-      "save may still be in progress. HART 7.3.3: the Config Change Counter\n"
-      "(and the change) must be maintained across a Device Reset, so after the\n"
-      "reboot the NEW tag and counter+1 must be read back.\n"
-      "Diagnoses: Device Reset discarding a pending/partial NV save."
-    ),
-    "steps": [
-      _discover(),
-      _s("Cmd13 - read original tag/descriptor/date", 13, expect_rc=0, save_as="orig13"),
-      _s("Cmd0 - counter before", 0, expect_rc=0, save_as="c0_before", delay_post=NV_SAVE_WAIT_S),
-      _s("Cmd18 - write tag/descriptor/date", 18, TORN_C18, expect_rc=0, expect_payload=TORN_C18,
-         delay_post=0.0),
-      _s("Cmd42 - Device Reset immediately", 42, expect_rc=0, delay_pre=0.0,
-         delay_post=RESET_BOOT_WAIT_S),
-      _after_reset("Cmd0 after reset - counter +1",
-                   expect_u16={"offset": CCC_OFFSET, "ref": "c0_before", "delta": 1}),
-      _s("Cmd13 - new tag/descriptor/date persisted", 13, expect_rc=0, expect_payload=TORN_C18),
-      _s("Cmd18 - restore tag/descriptor/date", 18, data_from="orig13", expect_rc=0,
-         expect_payload="orig13"),
-      _s("Cmd38 primary - clear Config Changed", 38, expect_rc=0),
-      _s("Cmd38 secondary - clear Config Changed", 38, master="secondary", expect_rc=0,
-         delay_post=NV_SAVE_WAIT_S),
-    ]
-  },
-
-  "21 - NV Persistence across Power Cycle (manual)": {
-    "manual_only": True,
-    "description": (
-      "Same checks as scenario 18, but across a real power loss.\n"
-      "The operator is asked to remove power for at least 5 s and restore it.\n"
-      "Cold Start set after power-up proves the device was really off.\n"
-      "Not part of RUN ALL (needs the operator)."
-    ),
-    "steps": [
-      _discover(),
-      _s("Cmd12 - read original message", 12, expect_rc=0, save_as="orig12"),
-      _s("Cmd13 - read original tag/descriptor/date", 13, expect_rc=0, save_as="orig13"),
-      _s("Cmd20 - read original long tag", 20, expect_rc=0, save_as="orig20"),
-      _s("Cmd17 - write message", 17, NV_MSG, expect_rc=0, expect_payload=NV_MSG),
-      _s("Cmd18 - write tag/descriptor/date", 18, NV_C18, expect_rc=0, expect_payload=NV_C18),
-      _s("Cmd22 - write long tag", 22, NV_LONG_TAG, expect_rc=0, expect_payload=NV_LONG_TAG),
-      _s("Cmd0 - counter after writes", 0, expect_rc=0, save_as="c0_written",
-         expect_status_set=ST_CONFIG_CHANGED, delay_post=NV_SAVE_WAIT_S),
-      {"label": "Operator: power-cycle the device",
-       "manual": ("Remove power from the device for at least 5 seconds, restore power and "
-                  "wait until it has booted (about 3 s)."),
-       "delay_post": 1.0},
-      _after_reset("Cmd0 after power-up - counter, Config Changed kept",
-                   expect_status_set=ST_CONFIG_CHANGED,
-                   expect_u16={"offset": CCC_OFFSET, "ref": "c0_written", "delta": 0}),
-      _s("Cmd12 - message persisted", 12, expect_rc=0, expect_payload=NV_MSG),
-      _s("Cmd13 - tag/descriptor/date persisted", 13, expect_rc=0, expect_payload=NV_C18),
-      _s("Cmd20 - long tag persisted", 20, expect_rc=0, expect_payload=NV_LONG_TAG),
-      _s("Cmd17 - restore message", 17, data_from="orig12", expect_rc=0, expect_payload="orig12"),
-      _s("Cmd18 - restore tag/descriptor/date", 18, data_from="orig13", expect_rc=0, expect_payload="orig13"),
-      _s("Cmd22 - restore long tag", 22, data_from="orig20", expect_rc=0, expect_payload="orig20"),
       _s("Cmd38 primary - clear Config Changed", 38, expect_rc=0),
       _s("Cmd38 secondary - clear Config Changed", 38, master="secondary", expect_rc=0,
          delay_post=NV_SAVE_WAIT_S),
