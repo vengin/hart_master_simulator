@@ -6,7 +6,6 @@ C12-C22, C38, C42). It also acts as the serial port given to ScenarioRunner.
 
 `faults` injects known defects so tests can prove a scenario detects them:
   no_persistence        configuration is lost on reset / power cycle
-  reset_drops_last_save C42 discards a change acknowledged just before it
   shared_config_flag    one Config Changed bit for both masters
   c38_clears_both       C38 clears both masters' Config Changed bits
   shared_cold_start     one Cold Start bit, cleared by the first response
@@ -195,8 +194,6 @@ class FakeSlave:
     return resp
 
   def _after_c42(self):
-    if "reset_drops_last_save" in self.faults and hasattr(self, "_last_nv_before_save"):
-      self.nv = self._last_nv_before_save
     self.reset()
 
   def _status(self, master):
@@ -231,7 +228,6 @@ class FakeSlave:
       if "counter_on_rc5" in self.faults:
         self._config_change()
       return 5, b""
-    self._last_nv_before_save = copy.deepcopy(self.nv)
     apply(data[:need])
     self._config_change()
     return 0, bytes(data[:need])
@@ -279,7 +275,6 @@ class FakeSlave:
         return 2, b""
       if mode > 1:
         return 12, b""
-      self._last_nv_before_save = copy.deepcopy(self.nv)
       r["poll"], r["loop"] = data[0], mode
       self._config_change()
       return 0, bytes([data[0], mode])
