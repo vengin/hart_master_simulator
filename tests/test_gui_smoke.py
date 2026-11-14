@@ -79,3 +79,43 @@ def test_gui_common_practice_tab_sends_encoded_requests(app, window, monkeypatch
   window._send_cp_command(49, "Cmd49")
   assert sent == [(33, bytes([0, 246])), (41, b"")]
   assert any("bad request data" in m for m in logged)
+
+
+def _run_all_in_gui(app, w, slave):
+  slave.is_open = True
+  w._worker._port = slave
+  w._connected = True
+  w._run_all_scenarios()
+  deadline = time.time() + 120
+  while w._run_all_active:
+    app.processEvents()
+    if time.time() > deadline:
+      raise AssertionError("Run All did not finish")
+  app.processEvents()
+  table = w._run_all_table
+  return {table.item(r, 0).text(): table.item(r, 1).text() for r in range(table.rowCount())}
+
+
+def test_gui_run_all_shows_overall_and_per_scenario_verdict(app, window, monkeypatch):
+  monkeypatch.setattr(sim.HartMasterSim, "RUN_ALL_GAP_MS", 0)
+  rows = _run_all_in_gui(app, window, FakeSlave())
+  auto = [n for n in SCENARIOS if not SCENARIOS[n].get("manual_only")]
+  manual = [n for n in SCENARIOS if SCENARIOS[n].get("manual_only")]
+  assert set(rows) == set(SCENARIOS)
+  assert all(rows[n] in ("✓ PASS", "✗ FAIL") for n in auto), rows
+  assert all(rows[n].startswith("SKIPPED") for n in manual), rows
+  overall = window._lbl_run_all_summary.text()
+  n_fail = sum(rows[n] == "✗ FAIL" for n in auto)
+  if n_fail:
+    assert overall.startswith("RUN ALL: FAIL - %d/%d" % (n_fail, len(auto))), overall
+  else:
+    assert overall == "RUN ALL: PASS - %d/%d scenarios passed" % (len(auto), len(auto))
+  assert window._btn_scenario_run.isEnabled() and window._btn_scenario_run_all.isEnabled()
+
+
+def test_gui_run_all_reports_fail_overall(app, window, monkeypatch):
+  monkeypatch.setattr(sim.HartMasterSim, "RUN_ALL_GAP_MS", 0)
+  rows = _run_all_in_gui(app, window, FakeSlave(faults={"shared_config_flag"}))
+  name12 = next(n for n in SCENARIOS if n.startswith("12 - "))
+  assert rows[name12] == "✗ FAIL"
+  assert window._lbl_run_all_summary.text().startswith("RUN ALL: FAIL")
