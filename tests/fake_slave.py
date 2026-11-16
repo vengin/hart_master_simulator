@@ -252,7 +252,7 @@ class FakeSlave:
 
   def _c0_data(self):
     r = self.ram
-    return bytes([254, EXP_DEV_TYPE >> 8, EXP_DEV_TYPE & 0xFF, 5, 7, 7, 25, (5 << 3), 0]) + DEVICE_ID + \
+    return bytes([254, EXP_DEV_TYPE >> 8, EXP_DEV_TYPE & 0xFF, 5, 7, 7, 26, (5 << 3), 0]) + DEVICE_ID + \
       bytes([r["pre"], 3, r["ccc"] >> 8, r["ccc"] & 0xFF, 0, 0x61, 0xF6, 0x61, 0xF6, 1])
 
   def _write(self, data, need, apply):
