@@ -915,9 +915,10 @@ class ScenarioRunner(QThread):
   RESPONSE_TIMEOUT_S = 2.0
 
   def __init__(self, port: serial.Serial, steps: list, unique_id: bytes | None,
-               poll_addr: int):
+               poll_addr: int, preambles: int = 5):
     super().__init__()
     self._port = port
+    self._preambles = preambles   # used by steps without an explicit "preambles"
     self._steps = steps
     self._unique_id = unique_id
     self._poll_addr = poll_addr
@@ -971,7 +972,7 @@ class ScenarioRunner(QThread):
 
       cmd      = step["cmd"]
       use_long = step.get("use_long", False)
-      preambles = step.get("preambles", 5)
+      preambles = step.get("preambles") or self._preambles
       master   = step.get("master", "primary")
       delay_pre  = step.get("delay_pre", 0.3)
       delay_post = step.get("delay_post", 0.2)
@@ -1094,7 +1095,7 @@ class HartMasterSim(QMainWindow):
 
   def __init__(self):
     super().__init__()
-    self.setWindowTitle("HART Master Simulator  v1.1.9")
+    self.setWindowTitle("HART Master Simulator  v1.1.10")
     self.setMinimumSize(1400, 750)
     self.resize(1482, 860)
 
@@ -2249,6 +2250,14 @@ class HartMasterSim(QMainWindow):
     self._lbl_scenario_summary.setStyleSheet("")
     self._scenario_hints.clear()
 
+  @staticmethod
+  def _split_scn_name(name: str):
+    """'11 - Write Commands ...' -> ('11', 'Write Commands ...')."""
+    num, sep, title = name.partition(" - ")
+    if sep and num.strip().isdigit():
+      return num.strip(), title
+    return "", name
+
   def _set_scn_result(self, name: str, result: str, steps: str, color: str):
     row = self._scn_rows.get(name)
     if row is None:
@@ -2275,12 +2284,14 @@ class HartMasterSim(QMainWindow):
       self._scn_list.setCurrentCell(row, 0)
       self._scn_list.blockSignals(False)
     self._active_steps = list(steps)
+    self._active_scn_name = name
 
     self._scenario_runner = ScenarioRunner(
       port=self._worker._port,
       steps=self._active_steps,
       unique_id=self._get_unique_id(),
       poll_addr=self._spin_addr.value(),
+      preambles=self._spin_preambles.value(),
     )
     self._scenario_runner.step_started.connect(self._on_scenario_step_start)
     self._scenario_runner.step_done.connect(self._on_scenario_step_done)
@@ -2417,7 +2428,8 @@ class HartMasterSim(QMainWindow):
 
     self._set_scn_result(name, "⏳ running", "", "#fbbf24")
     self._update_run_all_summary()
-    self._log_info(f"\n\n═══ SCENARIO START [{current}/{self._run_all_total}]: {name} ═══")
+    num, title = self._split_scn_name(name)
+    self._log_info(f"\n\n═══ SCENARIO {num + ' ' if num else ''}START [{current}/{self._run_all_total}]: {title} ═══")
     self._start_runner(name, steps, self._on_run_all_step_done)
 
   def _on_run_all_step_done(self, ok_count: int, fail_count: int):
@@ -2610,7 +2622,8 @@ class HartMasterSim(QMainWindow):
     self._lbl_scenario_summary.setText(summary)
     color = "#4ade80" if fail_count == 0 else ("#fbbf24" if ok_count > 0 else "#f87171")
     self._lbl_scenario_summary.setStyleSheet(f"color: {color}; font-weight: bold;")
-    self._log_info(f"═══ SCENARIO DONE: {summary} ═══")
+    num, _ = self._split_scn_name(getattr(self, "_active_scn_name", "") or "")
+    self._log_info(f"═══ SCENARIO {num + ' ' if num else ''}DONE: {summary} ═══")
 
     if fail_count > 0:
       self._scenario_hints.append(

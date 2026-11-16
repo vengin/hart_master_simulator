@@ -5,6 +5,7 @@
 #   data       bytes – command data payload
 #   use_long   bool  – use long (unique-ID) address frame
 #   preambles  int|None – override preamble count for this step
+#                            (omitted = "Preambles" value from the GUI)
 #   master     str|None – "primary" | "secondary" (address byte bit 7)
 #   delay_pre  float – sleep BEFORE sending (seconds)
 #   delay_post float – sleep AFTER response received (seconds)
@@ -42,16 +43,16 @@ NV_SAVE_WAIT_S = 1.5
 
 
 def _s(label, cmd, data=b"", **kw):
-  """Step with HART 7 defaults: long frame, primary master, 5 preambles."""
+  """Step with HART 7 defaults: long frame, primary master, GUI preamble count."""
   step = {"label": label, "cmd": cmd, "data": data, "use_long": True,
-          "preambles": 5, "master": "primary", "delay_pre": 0.3, "delay_post": 0.3}
+          "master": "primary", "delay_pre": 0.3, "delay_post": 0.3}
   step.update(kw)
   return step
 
 
 def _discover(note="Short-frame Cmd0 at the configured polling address: learns the long address."):
   return {"label": "Cmd0 short addr - discover device", "cmd": 0, "data": b"",
-          "use_long": False, "preambles": 5, "master": "primary",
+          "use_long": False, "master": "primary",
           "delay_pre": 0.5, "delay_post": 0.3, "expect_rc": 0, "note": note}
 
 
@@ -86,7 +87,7 @@ def _u(label, cmd, data=b"", long=False, master="primary",
   """Compact step builder for scenario 17 (short frame by default; the HART 7
   scenarios use _s above, long frame by default)."""
   step = {"label": label, "cmd": cmd, "data": data, "use_long": long,
-          "preambles": 5, "master": master, "delay_pre": pre, "delay_post": post,
+          "master": master, "delay_pre": pre, "delay_post": post,
           "note": note}
   step.update(extra)
   return step
@@ -717,19 +718,19 @@ SCENARIOS = {
     ),
     "steps": [
       {"label": "Cmd0 - primary master", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
        "note": "Baseline: primary master (address bit 7 = 1)."},
       {"label": "Cmd0 - secondary master", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "secondary",
+       "use_long": False, "master": "secondary",
        "delay_pre": 0.5, "delay_post": 0.5,
        "note": "Secondary master (address bit 7 = 0). Slave must also respond."},
       {"label": "Cmd1 PV - secondary master", "cmd": 1, "data": b"",
-       "use_long": False, "preambles": 5, "master": "secondary",
+       "use_long": False, "master": "secondary",
        "delay_pre": 0.3, "delay_post": 0.3,
        "note": "Normal read via secondary master."},
       {"label": "Cmd3 Dynamic - secondary master", "cmd": 3, "data": b"",
-       "use_long": False, "preambles": 5, "master": "secondary",
+       "use_long": False, "master": "secondary",
        "delay_pre": 0.3, "delay_post": 0.3,
        "note": "All vars via secondary master."},
     ]
@@ -745,7 +746,7 @@ SCENARIOS = {
     ),
     "steps": [
       {"label": f"Cmd0 - addr {addr}", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "_addr": addr,
        "delay_pre": 0.2, "delay_post": 0.4,
        "note": f"Poll address {addr}. Only the device at this address should respond."}
@@ -762,27 +763,27 @@ SCENARIOS = {
     ),
     "steps": [
       {"label": "Cmd0 short addr", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.4, "delay_post": 0.3,
        "note": "Short address frame. Response delimiter should be 0x06."},
       {"label": "Cmd0 long addr", "cmd": 0, "data": b"",
-       "use_long": True,  "preambles": 5, "master": "primary",
+       "use_long": True,  "master": "primary",
        "delay_pre": 0.4, "delay_post": 0.3,
        "note": "Long address frame. Response delimiter should be 0x86."},
       {"label": "Cmd1 short addr", "cmd": 1, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.3, "delay_post": 0.3,
        "note": "Back to short addr."},
       {"label": "Cmd1 long addr", "cmd": 1, "data": b"",
-       "use_long": True,  "preambles": 5, "master": "primary",
+       "use_long": True,  "master": "primary",
        "delay_pre": 0.3, "delay_post": 0.3,
        "note": "Long addr again."},
       {"label": "Cmd3 short addr", "cmd": 3, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.3, "delay_post": 0.3,
        "note": "Short addr, all variables."},
       {"label": "Cmd3 long addr", "cmd": 3, "data": b"",
-       "use_long": True,  "preambles": 5, "master": "primary",
+       "use_long": True,  "master": "primary",
        "delay_pre": 0.3, "delay_post": 0.3,
        "note": "Long addr, all variables."},
     ]
@@ -798,7 +799,7 @@ SCENARIOS = {
     ),
     "steps": [
       {"label": f"Cmd1 rapid #{i+1}", "cmd": 1, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.05, "delay_post": 0.0,
        "note": "Minimal inter-frame gap (50ms). Tests slave receiver reset speed."}
       for i in range(10)
@@ -816,22 +817,22 @@ SCENARIOS = {
     ),
     "steps": [
       {"label": "BAD CheckSum frame #1", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
        "note": "Checksum XOR'd with 0xFF - slave must discard.",
        "_corrupt_cs": True, "expect_no_response": True},
       {"label": "BAD CheckSum frame #2", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
        "note": "Second bad-CS frame.",
        "_corrupt_cs": True, "expect_no_response": True},
       {"label": "BAD CheckSum frame #3", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
        "note": "Third bad-CS frame.",
        "_corrupt_cs": True, "expect_no_response": True},
       {"label": "VALID Cmd0 - recovery check", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.8, "delay_post": 0.5,
        "note": "Valid frame after 3 bad ones. Slave MUST respond - tests recovery."},
     ]
@@ -848,15 +849,15 @@ SCENARIOS = {
     ),
     "steps": [
       {"label": "Cmd0 - check HART revision", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
        "note": "Check byte[3] of response payload: 5=HARTv5, 6=HARTv6, 7=HARTv7."},
       {"label": "Cmd0 long - cross-check", "cmd": 0, "data": b"",
-       "use_long": True,  "preambles": 5, "master": "primary",
+       "use_long": True,  "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.5,
        "note": "Long addr repeat - confirm same revision reported."},
       {"label": "Cmd48 - extended status", "cmd": 48, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.4, "delay_post": 0.4,
        "note": "HART 7 devices must implement Cmd48. HART 5 may return cmd-not-implemented (64)."},
     ]
@@ -894,28 +895,28 @@ SCENARIOS = {
        "note": "Rockwell phase: extended status."},
       # Phase 2: Emerson Trex
       {"label": "[Emerson] Cmd0 short (5 pre, secondary)", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "secondary",
+       "use_long": False, "master": "secondary",
        "delay_pre": 0.6, "delay_post": 0.4,
        "note": "Emerson Trex phase: secondary master, 5 preambles."},
       {"label": "[Emerson] Cmd13 Tag/Descriptor", "cmd": 13, "data": b"",
-       "use_long": False, "preambles": 5, "master": "secondary",
+       "use_long": False, "master": "secondary",
        "delay_pre": 0.3, "delay_post": 0.3,
        "note": "Emerson reads tag/descriptor."},
       {"label": "[Emerson] Cmd14 PV Info", "cmd": 14, "data": b"",
-       "use_long": False, "preambles": 5, "master": "secondary",
+       "use_long": False, "master": "secondary",
        "delay_pre": 0.3, "delay_post": 0.3,
        "note": "Emerson reads PV transducer info."},
       # Phase 3: rapid primary poll
       {"label": "[Poll] Cmd1 #1", "cmd": 1, "data": b"",
-       "use_long": True,  "preambles": 5, "master": "primary",
+       "use_long": True,  "master": "primary",
        "delay_pre": 0.2, "delay_post": 0.1,
        "note": "Rapid poll phase."},
       {"label": "[Poll] Cmd1 #2", "cmd": 1, "data": b"",
-       "use_long": True,  "preambles": 5, "master": "primary",
+       "use_long": True,  "master": "primary",
        "delay_pre": 0.2, "delay_post": 0.1,
        "note": "Rapid poll phase."},
       {"label": "[Poll] Cmd1 #3", "cmd": 1, "data": b"",
-       "use_long": True,  "preambles": 5, "master": "primary",
+       "use_long": True,  "master": "primary",
        "delay_pre": 0.2, "delay_post": 0.1,
        "note": "Rapid poll phase."},
     ]
@@ -933,23 +934,23 @@ SCENARIOS = {
     ),
     "steps": [
       {"label": "Cmd0 - identify device", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.3,
        "note": "Baseline identification. Unique ID learned for long-addr steps."},
       {"label": "Cmd12 - read message", "cmd": 12, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.3, "delay_post": 0.3,
        "note": "Read 32-char packed-ASCII message field. Must return 24 bytes payload."},
       {"label": "Cmd13 - tag/descriptor/date", "cmd": 13, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.3, "delay_post": 0.3,
        "note": "Read tag (8 char), descriptor (16 char), date (3 bytes). Must return 21 bytes."},
       {"label": "Cmd14 - PV transducer info", "cmd": 14, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.3, "delay_post": 0.3,
        "note": "PV units, upper/lower sensor limits, min span. Must return ≥14 bytes."},
       {"label": "Cmd14 - long addr repeat", "cmd": 14, "data": b"",
-       "use_long": True,  "preambles": 5, "master": "primary",
+       "use_long": True,  "master": "primary",
        "delay_pre": 0.3, "delay_post": 0.3,
        "note": "Same read via long addr – confirm consistent response."},
     ]
@@ -1052,27 +1053,27 @@ SCENARIOS = {
     ),
     "steps": [
       {"label": "Cmd0 - check HART revision", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.5, "delay_post": 0.3,
        "note": "Byte[3] of payload: 7 = HART7 required for Cmd9. 5/6 = expect RC=64 on Cmd9."},
       # Cmd9: request 4 device variable codes (0=PV,1=SV,2=TV,3=QV)
       {"label": "Cmd9 - device vars with status (PV/SV/TV/QV)", "cmd": 9,
        "data": bytes([0x00, 0x01, 0x02, 0x03]),
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.4, "delay_post": 0.3,
        "note": "HART7 Cmd9: request variable codes 0,1,2,3. Each var returns 8 bytes + status."},
       {"label": "Cmd9 - just PV (code 0)", "cmd": 9,
        "data": bytes([0x00, 0xFF, 0xFF, 0xFF]),
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.4, "delay_post": 0.3,
        "note": "Cmd9 with only PV requested (0xFF = not used). Minimal variable read."},
       {"label": "Cmd33 - read device variables", "cmd": 33,
        "data": bytes([0x00]),  # slot 0
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.4, "delay_post": 0.3,
        "note": "Cmd33: HART 5/6/7 compatible device variable read."},
       {"label": "Cmd3 - all dynamic vars (baseline)", "cmd": 3, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary",
+       "use_long": False, "master": "primary",
        "delay_pre": 0.3, "delay_post": 0.3,
        "note": "Cmd3 as baseline - compare values against Cmd9/33 results."},
     ]
@@ -1238,24 +1239,24 @@ SCENARIOS = {
       _s("Cmd7 - read original loop configuration", 7, expect_rc=0, save_as="orig7"),
       _s("Cmd6 - polling address 5", 6, b"\x05\x01", expect_rc=0, expect_payload=b"\x05\x01"),
       {"label": "Cmd0 short addr 5 - answers", "cmd": 0, "data": b"", "use_long": False,
-       "preambles": 5, "master": "primary", "_addr": 5, "delay_pre": 0.3, "delay_post": 0.3,
+       "master": "primary", "_addr": 5, "delay_pre": 0.3, "delay_post": 0.3,
        "expect_rc": 0},
       {"label": "Cmd0 short configured addr - silent", "cmd": 0, "data": b"", "use_long": False,
-       "preambles": 5, "master": "primary", "delay_pre": 0.3, "delay_post": NV_SAVE_WAIT_S,
+       "master": "primary", "delay_pre": 0.3, "delay_post": NV_SAVE_WAIT_S,
        "expect_no_response": True},
       _cycle_power(),
       {"label": "Cmd0 short addr 5 after power-up - answers, Cold Start", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary", "_addr": 5,
+       "use_long": False, "master": "primary", "_addr": 5,
        "delay_pre": 0.3, "delay_post": 0.3, "expect_rc": 0,
        "expect_status_set": ST_COLD_START, "retries": 20, "retry_delay": 0.5},
       {"label": "Cmd0 short configured addr after power-up - silent", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary", "delay_pre": 0.3,
+       "use_long": False, "master": "primary", "delay_pre": 0.3,
        "delay_post": 0.3, "expect_no_response": True},
       _s("Cmd7 - polling address 5 persisted", 7, expect_rc=0, expect_payload=b"\x05\x01"),
       _s("Cmd6 - restore original loop configuration", 6, data_from="orig7", expect_rc=0,
          expect_payload="orig7"),
       {"label": "Cmd0 short configured addr - answers again", "cmd": 0, "data": b"",
-       "use_long": False, "preambles": 5, "master": "primary", "delay_pre": 0.3,
+       "use_long": False, "master": "primary", "delay_pre": 0.3,
        "delay_post": 0.3, "expect_rc": 0},
       _s("Cmd38 primary - clear Config Changed", 38, expect_rc=0),
       _s("Cmd38 secondary - clear Config Changed", 38, master="secondary", expect_rc=0,
