@@ -1,0 +1,1662 @@
+  > Connected to COM3
+
+
+  > ═══ RUN ALL: sequential order ═══
+  > Skipped (operator interaction needed, use RUN SELECTED): 15 - Cold Start per Master after Power Cycle (manual); 18 - NV Persistence across Power Cycle (manual); 19 - NV Persistence of Polling Address (Cmd6, manual)
+
+
+  > ═══ SCENARIO 1 START [1/17]: Cold-Start Enumeration (Rockwell style) ═══
+  >   [1] Cmd0 short addr (20 preambles)
+──▶ TX  Cmd0 short addr (20 preambles)  (25B)
+  FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 02 80 00 00 82
+◀── RX  Cmd0 short addr (20 preambles)  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 7C
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [2] Cmd0 long addr (20 preambles)
+──▶ TX  Cmd0 long addr (20 preambles)  (29B)
+  FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  Cmd0 long addr (20 preambles)  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 37
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [3] Cmd1 PV (long addr)
+──▶ TX  Cmd1 PV (long addr)  (29B)
+  FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 82 A7 8B 01 23 45 01 00 C8
+◀── RX  Cmd1 PV (long addr)  (20B)
+  FF FF FF FF 86 A7 8B 01 23 45 01 07 00 00 39 00 00 00 00 F2
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [4] Cmd2 Current+% (long addr)
+──▶ TX  Cmd2 Current+% (long addr)  (29B)
+  FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 82 A7 8B 01 23 45 02 00 CB
+◀── RX  Cmd2 Current+% (long addr)  (23B)
+  FF FF FF FF 86 A7 8B 01 23 45 02 0A 00 00 40 80 00 00 00 00 00 00 05
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [5] Cmd3 Dynamic vars (long addr)
+──▶ TX  Cmd3 Dynamic vars (long addr)  (29B)
+  FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 82 A7 8B 01 23 45 03 00 CA
+◀── RX  Cmd3 Dynamic vars (long addr)  (39B)
+  FF FF FF FF 86 A7 8B 01 23 45 03 1A 00 00 40 80 00 00 39 00 00 00 00 39 42 B4 00 00 39 41 20 00 00 34 3E 52 90 D1 A3
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [6] Cmd48 Ext Status (long addr)
+──▶ TX  Cmd48 Ext Status (long addr)  (29B)
+  FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 82 A7 8B 01 23 45 30 00 F9
+◀── RX  Cmd48 Ext Status (long addr)  (29B)
+  FF FF FF FF 86 A7 8B 01 23 45 30 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ED
+  >      Result: PASS - OK (RC 0, status 0x00)
+  > ═══ SCENARIO 1 DONE: Done: 6/6 OK, 0 failed ═══
+
+
+  > ═══ SCENARIO 2 START [2/17]: Preamble Count Sweep (3/5/8/16/20) ═══
+  >   [1] Cmd0 - 3 preambles
+──▶ TX  Cmd0 - 3 preambles  (8B)
+  FF FF FF 02 80 00 00 82
+◀── RX  Cmd0 - 3 preambles  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 7C
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [2] Cmd0 - 5 preambles
+──▶ TX  Cmd0 - 5 preambles  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  Cmd0 - 5 preambles  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 7C
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [3] Cmd0 - 8 preambles
+──▶ TX  Cmd0 - 8 preambles  (13B)
+  FF FF FF FF FF FF FF FF 02 80 00 00 82
+◀── RX  Cmd0 - 8 preambles  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 7C
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [4] Cmd0 - 16 preambles
+──▶ TX  Cmd0 - 16 preambles  (21B)
+  FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 02 80 00 00 82
+◀── RX  Cmd0 - 16 preambles  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 7C
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [5] Cmd0 - 20 preambles
+──▶ TX  Cmd0 - 20 preambles  (25B)
+  FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 02 80 00 00 82
+◀── RX  Cmd0 - 20 preambles  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 7C
+  >      Result: PASS - OK (RC 0, status 0x00)
+  > ═══ SCENARIO 2 DONE: Done: 5/5 OK, 0 failed ═══
+
+
+  > ═══ SCENARIO 3 START [3/17]: Secondary Master Probe (Emerson Trex) ═══
+  >   [1] Cmd0 - primary master
+──▶ TX  Cmd0 - primary master  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  Cmd0 - primary master  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 7C
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [2] Cmd0 - secondary master
+──▶ TX  Cmd0 - secondary master  (10B)
+  FF FF FF FF FF 02 00 00 00 02
+◀── RX  Cmd0 - secondary master  (33B)
+  FF FF FF FF 06 00 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 BC
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [3] Cmd1 PV - secondary master
+──▶ TX  Cmd1 PV - secondary master  (10B)
+  FF FF FF FF FF 02 00 01 00 03
+◀── RX  Cmd1 PV - secondary master  (16B)
+  FF FF FF FF 06 00 01 07 00 40 39 00 00 00 00 79
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [4] Cmd3 Dynamic - secondary master
+──▶ TX  Cmd3 Dynamic - secondary master  (10B)
+  FF FF FF FF FF 02 00 03 00 01
+◀── RX  Cmd3 Dynamic - secondary master  (35B)
+  FF FF FF FF 06 00 03 1A 00 40 40 80 00 00 39 00 00 00 00 39 42 B4 00 00 39 41 20 00 00 34 3E 56 F3 AB 35
+  >      Result: PASS - OK (RC 0, status 0x40)
+  > ═══ SCENARIO 3 DONE: Done: 4/4 OK, 0 failed ═══
+
+
+  > ═══ SCENARIO 4 START [4/17]: Multi-Drop Address Sweep (addr 0–15) ═══
+  >   [1] Cmd0 - addr 0
+──▶ TX  Cmd0 - addr 0  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  Cmd0 - addr 0  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 7C
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [2] Cmd0 - addr 1
+──▶ TX  Cmd0 - addr 1  (10B)
+  FF FF FF FF FF 02 81 00 00 83
+  >      Result: PASS - silent (no device at this address)
+  >   [3] Cmd0 - addr 2
+──▶ TX  Cmd0 - addr 2  (10B)
+  FF FF FF FF FF 02 82 00 00 80
+  >      Result: PASS - silent (no device at this address)
+  >   [4] Cmd0 - addr 3
+──▶ TX  Cmd0 - addr 3  (10B)
+  FF FF FF FF FF 02 83 00 00 81
+  >      Result: PASS - silent (no device at this address)
+  >   [5] Cmd0 - addr 4
+──▶ TX  Cmd0 - addr 4  (10B)
+  FF FF FF FF FF 02 84 00 00 86
+  >      Result: PASS - silent (no device at this address)
+  >   [6] Cmd0 - addr 5
+──▶ TX  Cmd0 - addr 5  (10B)
+  FF FF FF FF FF 02 85 00 00 87
+  >      Result: PASS - silent (no device at this address)
+  >   [7] Cmd0 - addr 6
+──▶ TX  Cmd0 - addr 6  (10B)
+  FF FF FF FF FF 02 86 00 00 84
+  >      Result: PASS - silent (no device at this address)
+  >   [8] Cmd0 - addr 7
+──▶ TX  Cmd0 - addr 7  (10B)
+  FF FF FF FF FF 02 87 00 00 85
+  >      Result: PASS - silent (no device at this address)
+  >   [9] Cmd0 - addr 8
+──▶ TX  Cmd0 - addr 8  (10B)
+  FF FF FF FF FF 02 88 00 00 8A
+  >      Result: PASS - silent (no device at this address)
+  >   [10] Cmd0 - addr 9
+──▶ TX  Cmd0 - addr 9  (10B)
+  FF FF FF FF FF 02 89 00 00 8B
+  >      Result: PASS - silent (no device at this address)
+  >   [11] Cmd0 - addr 10
+──▶ TX  Cmd0 - addr 10  (10B)
+  FF FF FF FF FF 02 8A 00 00 88
+  >      Result: PASS - silent (no device at this address)
+  >   [12] Cmd0 - addr 11
+──▶ TX  Cmd0 - addr 11  (10B)
+  FF FF FF FF FF 02 8B 00 00 89
+  >      Result: PASS - silent (no device at this address)
+  >   [13] Cmd0 - addr 12
+──▶ TX  Cmd0 - addr 12  (10B)
+  FF FF FF FF FF 02 8C 00 00 8E
+  >      Result: PASS - silent (no device at this address)
+  >   [14] Cmd0 - addr 13
+──▶ TX  Cmd0 - addr 13  (10B)
+  FF FF FF FF FF 02 8D 00 00 8F
+  >      Result: PASS - silent (no device at this address)
+  >   [15] Cmd0 - addr 14
+──▶ TX  Cmd0 - addr 14  (10B)
+  FF FF FF FF FF 02 8E 00 00 8C
+  >      Result: PASS - silent (no device at this address)
+  >   [16] Cmd0 - addr 15
+──▶ TX  Cmd0 - addr 15  (10B)
+  FF FF FF FF FF 02 8F 00 00 8D
+  >      Result: PASS - silent (no device at this address)
+  > ═══ SCENARIO 4 DONE: Done: 16/16 OK, 0 failed ═══
+
+
+  > ═══ SCENARIO 5 START [5/17]: Short/Long Address Interleave ═══
+  >   [1] Cmd0 short addr
+──▶ TX  Cmd0 short addr  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  Cmd0 short addr  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 7C
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [2] Cmd0 long addr
+──▶ TX  Cmd0 long addr  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  Cmd0 long addr  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 37
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [3] Cmd1 short addr
+──▶ TX  Cmd1 short addr  (10B)
+  FF FF FF FF FF 02 80 01 00 83
+◀── RX  Cmd1 short addr  (16B)
+  FF FF FF FF 06 80 01 07 00 00 39 00 00 00 00 B9
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [4] Cmd1 long addr
+──▶ TX  Cmd1 long addr  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 01 00 C8
+◀── RX  Cmd1 long addr  (20B)
+  FF FF FF FF 86 A7 8B 01 23 45 01 07 00 00 39 00 00 00 00 F2
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [5] Cmd3 short addr
+──▶ TX  Cmd3 short addr  (10B)
+  FF FF FF FF FF 02 80 03 00 81
+◀── RX  Cmd3 short addr  (35B)
+  FF FF FF FF 06 80 03 1A 00 00 40 80 00 00 39 00 00 00 00 39 42 B4 00 00 39 41 20 00 00 34 3E 64 DD EA A8
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [6] Cmd3 long addr
+──▶ TX  Cmd3 long addr  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 03 00 CA
+◀── RX  Cmd3 long addr  (39B)
+  FF FF FF FF 86 A7 8B 01 23 45 03 1A 00 00 40 80 00 00 39 00 00 00 00 39 42 B4 00 00 39 41 20 00 00 34 3E 65 31 A7 43
+  >      Result: PASS - OK (RC 0, status 0x00)
+  > ═══ SCENARIO 5 DONE: Done: 6/6 OK, 0 failed ═══
+
+
+  > ═══ SCENARIO 6 START [6/17]: Rapid-Fire Stress (gap/timing) ═══
+  >   [1] Cmd1 rapid #1
+──▶ TX  Cmd1 rapid #1  (10B)
+  FF FF FF FF FF 02 80 01 00 83
+◀── RX  Cmd1 rapid #1  (16B)
+  FF FF FF FF 06 80 01 07 00 00 39 00 00 00 00 B9
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [2] Cmd1 rapid #2
+──▶ TX  Cmd1 rapid #2  (10B)
+  FF FF FF FF FF 02 80 01 00 83
+◀── RX  Cmd1 rapid #2  (16B)
+  FF FF FF FF 06 80 01 07 00 00 39 00 00 00 00 B9
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [3] Cmd1 rapid #3
+──▶ TX  Cmd1 rapid #3  (10B)
+  FF FF FF FF FF 02 80 01 00 83
+◀── RX  Cmd1 rapid #3  (16B)
+  FF FF FF FF 06 80 01 07 00 00 39 00 00 00 00 B9
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [4] Cmd1 rapid #4
+──▶ TX  Cmd1 rapid #4  (10B)
+  FF FF FF FF FF 02 80 01 00 83
+◀── RX  Cmd1 rapid #4  (16B)
+  FF FF FF FF 06 80 01 07 00 00 39 00 00 00 00 B9
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [5] Cmd1 rapid #5
+──▶ TX  Cmd1 rapid #5  (10B)
+  FF FF FF FF FF 02 80 01 00 83
+◀── RX  Cmd1 rapid #5  (16B)
+  FF FF FF FF 06 80 01 07 00 00 39 00 00 00 00 B9
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [6] Cmd1 rapid #6
+──▶ TX  Cmd1 rapid #6  (10B)
+  FF FF FF FF FF 02 80 01 00 83
+◀── RX  Cmd1 rapid #6  (16B)
+  FF FF FF FF 06 80 01 07 00 00 39 00 00 00 00 B9
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [7] Cmd1 rapid #7
+──▶ TX  Cmd1 rapid #7  (10B)
+  FF FF FF FF FF 02 80 01 00 83
+◀── RX  Cmd1 rapid #7  (16B)
+  FF FF FF FF 06 80 01 07 00 00 39 00 00 00 00 B9
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [8] Cmd1 rapid #8
+──▶ TX  Cmd1 rapid #8  (10B)
+  FF FF FF FF FF 02 80 01 00 83
+◀── RX  Cmd1 rapid #8  (16B)
+  FF FF FF FF 06 80 01 07 00 00 39 00 00 00 00 B9
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [9] Cmd1 rapid #9
+──▶ TX  Cmd1 rapid #9  (10B)
+  FF FF FF FF FF 02 80 01 00 83
+◀── RX  Cmd1 rapid #9  (16B)
+  FF FF FF FF 06 80 01 07 00 00 39 00 00 00 00 B9
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [10] Cmd1 rapid #10
+──▶ TX  Cmd1 rapid #10  (10B)
+  FF FF FF FF FF 02 80 01 00 83
+◀── RX  Cmd1 rapid #10  (16B)
+  FF FF FF FF 06 80 01 07 00 00 39 00 00 00 00 B9
+  >      Result: PASS - OK (RC 0, status 0x00)
+  > ═══ SCENARIO 6 DONE: Done: 10/10 OK, 0 failed ═══
+
+
+  > ═══ SCENARIO 7 START [7/17]: Bad Checksum Injection × 3 then Valid ═══
+  >   [1] BAD CheckSum frame #1
+──▶ TX  BAD CheckSum frame #1  (10B)
+  FF FF FF FF FF 02 80 00 00 7D
+  >      Result: PASS - silent (expected)
+  >   [2] BAD CheckSum frame #2
+──▶ TX  BAD CheckSum frame #2  (10B)
+  FF FF FF FF FF 02 80 00 00 7D
+  >      Result: PASS - silent (expected)
+  >   [3] BAD CheckSum frame #3
+──▶ TX  BAD CheckSum frame #3  (10B)
+  FF FF FF FF FF 02 80 00 00 7D
+  >      Result: PASS - silent (expected)
+  >   [4] VALID Cmd0 - recovery check
+──▶ TX  VALID Cmd0 - recovery check  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  VALID Cmd0 - recovery check  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 7C
+  >      Result: PASS - OK (RC 0, status 0x00)
+  > ═══ SCENARIO 7 DONE: Done: 4/4 OK, 0 failed ═══
+
+
+  > ═══ SCENARIO 8 START [8/17]: HART Revision Probe (Cmd0 → check revision byte) ═══
+  >   [1] Cmd0 - check HART revision
+──▶ TX  Cmd0 - check HART revision  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  Cmd0 - check HART revision  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 7C
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [2] Cmd0 long - cross-check
+──▶ TX  Cmd0 long - cross-check  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  Cmd0 long - cross-check  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 37
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [3] Cmd48 - extended status
+──▶ TX  Cmd48 - extended status  (10B)
+  FF FF FF FF FF 02 80 30 00 B2
+◀── RX  Cmd48 - extended status  (25B)
+  FF FF FF FF 06 80 30 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A6
+  >      Result: PASS - OK (RC 0, status 0x00)
+  > ═══ SCENARIO 8 DONE: Done: 3/3 OK, 0 failed ═══
+
+
+  > ═══ SCENARIO 9 START [9/17]: Full PLC Session (Rockwell + Emerson combined) ═══
+  >   [1] [Rockwell] Cmd0 short (20 pre)
+──▶ TX  [Rockwell] Cmd0 short (20 pre)  (25B)
+  FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 02 80 00 00 82
+◀── RX  [Rockwell] Cmd0 short (20 pre)  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 7C
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [2] [Rockwell] Cmd0 long (20 pre)
+──▶ TX  [Rockwell] Cmd0 long (20 pre)  (29B)
+  FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  [Rockwell] Cmd0 long (20 pre)  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 37
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [3] [Rockwell] Cmd1 PV
+──▶ TX  [Rockwell] Cmd1 PV  (29B)
+  FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 82 A7 8B 01 23 45 01 00 C8
+◀── RX  [Rockwell] Cmd1 PV  (20B)
+  FF FF FF FF 86 A7 8B 01 23 45 01 07 00 00 39 00 00 00 00 F2
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [4] [Rockwell] Cmd2 Current
+──▶ TX  [Rockwell] Cmd2 Current  (29B)
+  FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 82 A7 8B 01 23 45 02 00 CB
+◀── RX  [Rockwell] Cmd2 Current  (23B)
+  FF FF FF FF 86 A7 8B 01 23 45 02 0A 00 00 40 80 00 00 00 00 00 00 05
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [5] [Rockwell] Cmd48 Ext Status
+──▶ TX  [Rockwell] Cmd48 Ext Status  (29B)
+  FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 82 A7 8B 01 23 45 30 00 F9
+◀── RX  [Rockwell] Cmd48 Ext Status  (29B)
+  FF FF FF FF 86 A7 8B 01 23 45 30 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ED
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [6] [Emerson] Cmd0 short (5 pre, secondary)
+──▶ TX  [Emerson] Cmd0 short (5 pre, secondary)  (10B)
+  FF FF FF FF FF 02 00 00 00 02
+◀── RX  [Emerson] Cmd0 short (5 pre, secondary)  (33B)
+  FF FF FF FF 06 00 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 BC
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [7] [Emerson] Cmd13 Tag/Descriptor
+──▶ TX  [Emerson] Cmd13 Tag/Descriptor  (10B)
+  FF FF FF FF FF 02 00 0D 00 0F
+◀── RX  [Emerson] Cmd13 Tag/Descriptor  (32B)
+  FF FF FF FF 06 00 0D 17 00 40 09 53 D3 7F 4E 31 4C F3 45 80 41 53 0D 22 50 50 F4 A0 0D 0B 7E BE
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [8] [Emerson] Cmd14 PV Info
+──▶ TX  [Emerson] Cmd14 PV Info  (10B)
+  FF FF FF FF FF 02 00 0E 00 0C
+◀── RX  [Emerson] Cmd14 PV Info  (27B)
+  FF FF FF FF 06 00 0E 12 00 40 00 00 00 39 7F A0 00 00 7F A0 00 00 7F A0 00 00 BC
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [9] [Poll] Cmd1 #1
+──▶ TX  [Poll] Cmd1 #1  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 01 00 C8
+◀── RX  [Poll] Cmd1 #1  (20B)
+  FF FF FF FF 86 A7 8B 01 23 45 01 07 00 00 39 00 00 00 00 F2
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [10] [Poll] Cmd1 #2
+──▶ TX  [Poll] Cmd1 #2  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 01 00 C8
+◀── RX  [Poll] Cmd1 #2  (20B)
+  FF FF FF FF 86 A7 8B 01 23 45 01 07 00 00 39 00 00 00 00 F2
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [11] [Poll] Cmd1 #3
+──▶ TX  [Poll] Cmd1 #3  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 01 00 C8
+◀── RX  [Poll] Cmd1 #3  (20B)
+  FF FF FF FF 86 A7 8B 01 23 45 01 07 00 00 39 00 00 00 00 F2
+  >      Result: PASS - OK (RC 0, status 0x00)
+  > ═══ SCENARIO 9 DONE: Done: 11/11 OK, 0 failed ═══
+
+
+  > ═══ SCENARIO 10 START [10/17]: Identity Read (Cmd12/13/14) ═══
+  >   [1] Cmd0 - identify device
+──▶ TX  Cmd0 - identify device  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  Cmd0 - identify device  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 7C
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [2] Cmd12 - read message
+──▶ TX  Cmd12 - read message  (10B)
+  FF FF FF FF FF 02 80 0C 00 8E
+◀── RX  Cmd12 - read message  (35B)
+  FF FF FF FF 06 80 0C 1A 00 00 09 53 D3 80 80 52 53 78 13 30 15 85 80 41 56 24 31 60 10 53 4F 82 08 20 97
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [3] Cmd13 - tag/descriptor/date
+──▶ TX  Cmd13 - tag/descriptor/date  (10B)
+  FF FF FF FF FF 02 80 0D 00 8F
+◀── RX  Cmd13 - tag/descriptor/date  (32B)
+  FF FF FF FF 06 80 0D 17 00 00 09 53 D3 7F 4E 31 4C F3 45 80 41 53 0D 22 50 50 F4 A0 0D 0B 7E 7E
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [4] Cmd14 - PV transducer info
+──▶ TX  Cmd14 - PV transducer info  (10B)
+  FF FF FF FF FF 02 80 0E 00 8C
+◀── RX  Cmd14 - PV transducer info  (27B)
+  FF FF FF FF 06 80 0E 12 00 00 00 00 00 39 7F A0 00 00 7F A0 00 00 7F A0 00 00 7C
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [5] Cmd14 - long addr repeat
+──▶ TX  Cmd14 - long addr repeat  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0E 00 C7
+◀── RX  Cmd14 - long addr repeat  (31B)
+  FF FF FF FF 86 A7 8B 01 23 45 0E 12 00 00 00 00 00 39 7F A0 00 00 7F A0 00 00 7F A0 00 00 37
+  >      Result: PASS - OK (RC 0, status 0x00)
+  > ═══ SCENARIO 10 DONE: Done: 5/5 OK, 0 failed ═══
+
+
+  > ═══ SCENARIO 11 START [11/17]: Write Commands (Cmd17/18/19) - echo, counter, restore ═══
+  >   [1] Cmd0 short addr - discover device
+──▶ TX  Cmd0 short addr - discover device  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  Cmd0 short addr - discover device  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 7C
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [2] Cmd0 - counter before
+──▶ TX  Cmd0 - counter before  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  Cmd0 - counter before  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 27 00 61 F6 61 F6 01 37
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [3] Cmd12 - read original message
+──▶ TX  Cmd12 - read original message  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0C 00 C5
+◀── RX  Cmd12 - read original message  (39B)
+  FF FF FF FF 86 A7 8B 01 23 45 0C 1A 00 00 09 53 D3 80 80 52 53 78 13 30 15 85 80 41 56 24 31 60 10 53 4F 82 08 20 DC
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [4] Cmd13 - read original tag/descriptor/date
+──▶ TX  Cmd13 - read original tag/descriptor/date  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0D 00 C4
+◀── RX  Cmd13 - read original tag/descriptor/date  (36B)
+  FF FF FF FF 86 A7 8B 01 23 45 0D 17 00 00 09 53 D3 7F 4E 31 4C F3 45 80 41 53 0D 22 50 50 F4 A0 0D 0B 7E 35
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [5] Cmd16 - read original final assembly number
+──▶ TX  Cmd16 - read original final assembly number  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 10 00 D9
+◀── RX  Cmd16 - read original final assembly number  (18B)
+  FF FF FF FF 86 A7 8B 01 23 45 10 05 00 00 00 00 00 D8
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [6] Cmd17 - write message
+──▶ TX  Cmd17 - write message  (38B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 11 18 20 14 94 80 E5 A0 40 54 93 25 35 05 38 31 60 50 54 D4 80 D1 53 4C 11 C5 14
+◀── RX  Cmd17 - write message  (39B)
+  FF FF FF FF 86 A7 8B 01 23 45 11 1A 00 00 20 14 94 80 E5 A0 40 54 93 25 35 05 38 31 60 50 54 D4 80 D1 53 4C 11 C5 12
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [7] Cmd18 - write tag/descriptor/date
+──▶ TX  Cmd18 - write tag/descriptor/date  (35B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 12 15 39 65 05 4D 4C 31 39 68 10 15 24 C9 4D 48 14 15 35 20 0D 0B 7E 77
+◀── RX  Cmd18 - write tag/descriptor/date  (36B)
+  FF FF FF FF 86 A7 8B 01 23 45 12 17 00 40 39 65 05 4D 4C 31 39 68 10 15 24 C9 4D 48 14 15 35 20 0D 0B 7E 31
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [8] Cmd19 - write final assembly number
+──▶ TX  Cmd19 - write final assembly number  (17B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 13 03 12 34 56 A9
+◀── RX  Cmd19 - write final assembly number  (18B)
+  FF FF FF FF 86 A7 8B 01 23 45 13 05 00 40 12 34 56 EB
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [9] Cmd17 - 10 bytes only (expect RC 5)
+──▶ TX  Cmd17 - 10 bytes only (expect RC 5)  (24B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 11 0A 20 14 94 80 E5 A0 40 54 93 25 15
+◀── RX  Cmd17 - 10 bytes only (expect RC 5)  (15B)
+  FF FF FF FF 86 A7 8B 01 23 45 11 02 05 40 9B
+  >      Result: PASS - OK (RC 5, status 0x40)
+  >   [10] Cmd18 - 5 bytes only (expect RC 5)
+──▶ TX  Cmd18 - 5 bytes only (expect RC 5)  (19B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 12 05 39 65 05 4D 4C 86
+◀── RX  Cmd18 - 5 bytes only (expect RC 5)  (15B)
+  FF FF FF FF 86 A7 8B 01 23 45 12 02 05 40 98
+  >      Result: PASS - OK (RC 5, status 0x40)
+  >   [11] Cmd19 - 2 bytes only (expect RC 5)
+──▶ TX  Cmd19 - 2 bytes only (expect RC 5)  (16B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 13 02 12 34 FE
+◀── RX  Cmd19 - 2 bytes only (expect RC 5)  (15B)
+  FF FF FF FF 86 A7 8B 01 23 45 13 02 05 40 99
+  >      Result: PASS - OK (RC 5, status 0x40)
+  >   [12] Cmd0 - counter +3, Config Changed set
+──▶ TX  Cmd0 - counter +3, Config Changed set  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  Cmd0 - counter +3, Config Changed set  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 2A 00 61 F6 61 F6 01 7A
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [13] Cmd12 - read back message
+──▶ TX  Cmd12 - read back message  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0C 00 C5
+◀── RX  Cmd12 - read back message  (39B)
+  FF FF FF FF 86 A7 8B 01 23 45 0C 1A 00 40 20 14 94 80 E5 A0 40 54 93 25 35 05 38 31 60 50 54 D4 80 D1 53 4C 11 C5 4F
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [14] Cmd13 - read back tag/descriptor/date
+──▶ TX  Cmd13 - read back tag/descriptor/date  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0D 00 C4
+◀── RX  Cmd13 - read back tag/descriptor/date  (36B)
+  FF FF FF FF 86 A7 8B 01 23 45 0D 17 00 40 39 65 05 4D 4C 31 39 68 10 15 24 C9 4D 48 14 15 35 20 0D 0B 7E 2E
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [15] Cmd16 - read back final assembly number
+──▶ TX  Cmd16 - read back final assembly number  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 10 00 D9
+◀── RX  Cmd16 - read back final assembly number  (18B)
+  FF FF FF FF 86 A7 8B 01 23 45 10 05 00 40 12 34 56 E8
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [16] Cmd17 - restore message
+──▶ TX  Cmd17 - restore message  (38B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 11 18 09 53 D3 80 80 52 53 78 13 30 15 85 80 41 56 24 31 60 10 53 4F 82 08 20 C7
+◀── RX  Cmd17 - restore message  (39B)
+  FF FF FF FF 86 A7 8B 01 23 45 11 1A 00 40 09 53 D3 80 80 52 53 78 13 30 15 85 80 41 56 24 31 60 10 53 4F 82 08 20 81
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [17] Cmd18 - restore tag/descriptor/date
+──▶ TX  Cmd18 - restore tag/descriptor/date  (35B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 12 15 09 53 D3 7F 4E 31 4C F3 45 80 41 53 0D 22 50 50 F4 A0 0D 0B 7E 2C
+◀── RX  Cmd18 - restore tag/descriptor/date  (36B)
+  FF FF FF FF 86 A7 8B 01 23 45 12 17 00 40 09 53 D3 7F 4E 31 4C F3 45 80 41 53 0D 22 50 50 F4 A0 0D 0B 7E 6A
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [18] Cmd19 - restore final assembly number
+──▶ TX  Cmd19 - restore final assembly number  (17B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 13 03 00 00 00 D9
+◀── RX  Cmd19 - restore final assembly number  (18B)
+  FF FF FF FF 86 A7 8B 01 23 45 13 05 00 40 00 00 00 9B
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [19] Cmd38 primary - clear Config Changed
+──▶ TX  Cmd38 primary - clear Config Changed  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 26 00 EF
+◀── RX  Cmd38 primary - clear Config Changed  (17B)
+  FF FF FF FF 86 A7 8B 01 23 45 26 04 00 00 01 2D C3
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [20] Cmd38 secondary - clear Config Changed
+──▶ TX  Cmd38 secondary - clear Config Changed  (14B)
+  FF FF FF FF FF 82 27 8B 01 23 45 26 00 6F
+◀── RX  Cmd38 secondary - clear Config Changed  (17B)
+  FF FF FF FF 86 27 8B 01 23 45 26 04 00 00 01 2D 43
+  >      Result: PASS - OK (RC 0, status 0x00)
+  > ═══ SCENARIO 11 DONE: Done: 20/20 OK, 0 failed ═══
+
+
+  > ═══ SCENARIO 12 START [12/17]: Configuration Changed per Master + Cmd38 ═══
+  >   [1] Cmd0 short addr - discover device
+──▶ TX  Cmd0 short addr - discover device  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  Cmd0 short addr - discover device  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 2D 00 61 F6 61 F6 01 76
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [2] Cmd13 - read tag/descriptor/date
+──▶ TX  Cmd13 - read tag/descriptor/date  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0D 00 C4
+◀── RX  Cmd13 - read tag/descriptor/date  (36B)
+  FF FF FF FF 86 A7 8B 01 23 45 0D 17 00 00 09 53 D3 7F 4E 31 4C F3 45 80 41 53 0D 22 50 50 F4 A0 0D 0B 7E 35
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [3] Cmd18 - re-write the same values
+──▶ TX  Cmd18 - re-write the same values  (35B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 12 15 09 53 D3 7F 4E 31 4C F3 45 80 41 53 0D 22 50 50 F4 A0 0D 0B 7E 2C
+◀── RX  Cmd18 - re-write the same values  (36B)
+  FF FF FF FF 86 A7 8B 01 23 45 12 17 00 00 09 53 D3 7F 4E 31 4C F3 45 80 41 53 0D 22 50 50 F4 A0 0D 0B 7E 2A
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [4] Cmd0 primary - Config Changed set
+──▶ TX  Cmd0 primary - Config Changed set  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  Cmd0 primary - Config Changed set  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 2E 00 61 F6 61 F6 01 7E
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [5] Cmd0 primary again - still set (Cmd0 must not clear it)
+──▶ TX  Cmd0 primary again - still set (Cmd0 must not clear it)  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  Cmd0 primary again - still set (Cmd0 must not clear it)  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 2E 00 61 F6 61 F6 01 7E
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [6] Cmd0 secondary - Config Changed set
+──▶ TX  Cmd0 secondary - Config Changed set  (14B)
+  FF FF FF FF FF 82 27 8B 01 23 45 00 00 49
+◀── RX  Cmd0 secondary - Config Changed set  (37B)
+  FF FF FF FF 86 27 8B 01 23 45 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 2E 00 61 F6 61 F6 01 FE
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [7] Cmd38 primary - wrong counter (expect RC 9)
+──▶ TX  Cmd38 primary - wrong counter (expect RC 9)  (16B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 26 02 01 2F C3
+◀── RX  Cmd38 primary - wrong counter (expect RC 9)  (17B)
+  FF FF FF FF 86 A7 8B 01 23 45 26 04 09 40 01 2E 89
+  >      Result: PASS - OK (RC 9, status 0x40)
+  >   [8] Cmd38 primary - matching counter
+──▶ TX  Cmd38 primary - matching counter  (16B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 26 02 01 2E C2
+◀── RX  Cmd38 primary - matching counter  (17B)
+  FF FF FF FF 86 A7 8B 01 23 45 26 04 00 00 01 2E C0
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [9] Cmd0 primary - Config Changed clear
+──▶ TX  Cmd0 primary - Config Changed clear  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  Cmd0 primary - Config Changed clear  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 2E 00 61 F6 61 F6 01 3E
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [10] Cmd0 secondary - still set
+──▶ TX  Cmd0 secondary - still set  (14B)
+  FF FF FF FF FF 82 27 8B 01 23 45 00 00 49
+◀── RX  Cmd0 secondary - still set  (37B)
+  FF FF FF FF 86 27 8B 01 23 45 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 2E 00 61 F6 61 F6 01 FE
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [11] Cmd38 secondary - no counter (HART 6 style)
+──▶ TX  Cmd38 secondary - no counter (HART 6 style)  (14B)
+  FF FF FF FF FF 82 27 8B 01 23 45 26 00 6F
+◀── RX  Cmd38 secondary - no counter (HART 6 style)  (17B)
+  FF FF FF FF 86 27 8B 01 23 45 26 04 00 00 01 2E 40
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [12] Cmd0 secondary - Config Changed clear
+──▶ TX  Cmd0 secondary - Config Changed clear  (14B)
+  FF FF FF FF FF 82 27 8B 01 23 45 00 00 49
+◀── RX  Cmd0 secondary - Config Changed clear  (37B)
+  FF FF FF FF 86 27 8B 01 23 45 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 2E 00 61 F6 61 F6 01 BE
+  >      Result: PASS - OK (RC 0, status 0x00)
+  > ═══ SCENARIO 12 DONE: Done: 12/12 OK, 0 failed ═══
+
+
+  > ═══ SCENARIO 13 START [13/17]: Device Variable Commands (Cmd9/33) ═══
+  >   [1] Cmd0 - check HART revision
+──▶ TX  Cmd0 - check HART revision  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  Cmd0 - check HART revision  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 2E 00 61 F6 61 F6 01 75
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [2] Cmd9 - device vars with status (PV/SV/TV/QV)
+──▶ TX  Cmd9 - device vars with status (PV/SV/TV/QV)  (14B)
+  FF FF FF FF FF 02 80 09 04 00 01 02 03 8F
+◀── RX  Cmd9 - device vars with status (PV/SV/TV/QV)  (48B)
+  FF FF FF FF 06 80 09 27 00 00 00 00 00 39 00 00 00 00 C0 01 00 39 42 B4 00 00 C0 02 00 39 41 20 00 00 C0 03 46 34 3E 7D 82 1E C0 01 B3 2D 00 34
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [3] Cmd9 - just PV (code 0)
+──▶ TX  Cmd9 - just PV (code 0)  (14B)
+  FF FF FF FF FF 02 80 09 04 00 FF FF FF 70
+◀── RX  Cmd9 - just PV (code 0)  (11B)
+  FF FF FF FF 06 80 09 02 02 00 8F
+  >      Result: PASS - OK (RC 2, status 0x00)
+  >   [4] Cmd33 - read device variables
+──▶ TX  Cmd33 - read device variables  (11B)
+  FF FF FF FF FF 02 80 21 01 00 A2
+◀── RX  Cmd33 - read device variables  (17B)
+  FF FF FF FF 06 80 21 08 00 00 00 39 00 00 00 00 96
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [5] Cmd3 - all dynamic vars (baseline)
+──▶ TX  Cmd3 - all dynamic vars (baseline)  (10B)
+  FF FF FF FF FF 02 80 03 00 81
+◀── RX  Cmd3 - all dynamic vars (baseline)  (35B)
+  FF FF FF FF 06 80 03 1A 00 00 40 80 00 00 39 00 00 00 00 39 42 B4 00 00 39 41 20 00 00 34 3E 7E 73 DF 29
+  >      Result: PASS - OK (RC 0, status 0x00)
+  > ═══ SCENARIO 13 DONE: Done: 5/5 OK, 0 failed ═══
+
+
+  > ═══ SCENARIO 14 START [14/17]: Broadcast Address (long frame 00 00 00 00 00) ═══
+  >   [1] Cmd0 short addr - discover device
+──▶ TX  Cmd0 short addr - discover device  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  Cmd0 short addr - discover device  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 2E 00 61 F6 61 F6 01 75
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [2] Cmd13 - read own tag
+──▶ TX  Cmd13 - read own tag  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0D 00 C4
+◀── RX  Cmd13 - read own tag  (36B)
+  FF FF FF FF 86 A7 8B 01 23 45 0D 17 00 00 09 53 D3 7F 4E 31 4C F3 45 80 41 53 0D 22 50 50 F4 A0 0D 0B 7E 35
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [3] Cmd0 - to broadcast addr (expect NO response)
+──▶ TX  Cmd0 - to broadcast addr (expect NO response)  (14B)
+  FF FF FF FF FF 82 80 00 00 00 00 00 00 02
+  >      Result: PASS - silent (expected)
+  >   [4] Cmd1 - to broadcast addr (expect NO response)
+──▶ TX  Cmd1 - to broadcast addr (expect NO response)  (14B)
+  FF FF FF FF FF 82 80 00 00 00 00 01 00 03
+  >      Result: PASS - silent (expected)
+  >   [5] Cmd6 - to broadcast addr (expect NO response)
+──▶ TX  Cmd6 - to broadcast addr (expect NO response)  (16B)
+  FF FF FF FF FF 82 80 00 00 00 00 06 02 00 01 07
+  >      Result: PASS - silent (expected)
+  >   [6] Cmd11 - broadcast, matching tag
+──▶ TX  Cmd11 - broadcast, matching tag  (20B)
+  FF FF FF FF FF 82 80 00 00 00 00 0B 06 09 53 D3 7F 4E 31 86
+◀── RX  Cmd11 - broadcast, matching tag  (37B)
+  FF FF FF FF 86 80 00 00 00 00 0B 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 2E 00 61 F6 61 F6 01 FE
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [7] Cmd11 - broadcast, wrong tag (expect NO response)
+──▶ TX  Cmd11 - broadcast, wrong tag (expect NO response)  (20B)
+  FF FF FF FF FF 82 80 00 00 00 00 0B 06 38 F4 D5 0C 85 07 98
+  >      Result: PASS - silent (expected)
+  >   [8] Cmd11 - own long address, matching tag
+──▶ TX  Cmd11 - own long address, matching tag  (20B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0B 06 09 53 D3 7F 4E 31 4D
+◀── RX  Cmd11 - own long address, matching tag  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 0B 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 2E 00 61 F6 61 F6 01 35
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [9] Cmd0 - recovery check
+──▶ TX  Cmd0 - recovery check  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  Cmd0 - recovery check  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 2E 00 61 F6 61 F6 01 3E
+  >      Result: PASS - OK (RC 0, status 0x00)
+  > ═══ SCENARIO 14 DONE: Done: 9/9 OK, 0 failed ═══
+
+
+  > ═══ SCENARIO 16 START [15/17]: Invalid Command Exception Handling ═══
+  >   [1] Cmd0 short addr - discover device
+──▶ TX  Cmd0 short addr - discover device  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  Cmd0 short addr - discover device  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 2E 00 61 F6 61 F6 01 75
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [2] Send Unimplemented Cmd 99 (long frame)
+──▶ TX  Send Unimplemented Cmd 99 (long frame)  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 63 00 AA
+◀── RX  Send Unimplemented Cmd 99 (long frame)  (15B)
+  FF FF FF FF 86 A7 8B 01 23 45 63 02 40 00 EC
+  >      Result: PASS - OK (RC 64, status 0x00)
+  >   [3] Cmd0 - still alive
+──▶ TX  Cmd0 - still alive  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  Cmd0 - still alive  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 2E 00 61 F6 61 F6 01 3E
+  >      Result: PASS - OK (RC 0, status 0x00)
+  > ═══ SCENARIO 16 DONE: Done: 3/3 OK, 0 failed ═══
+
+
+  > ═══ SCENARIO 17 START [16/17]: Universal Command Conformance (UAL 3.1-3.17) ═══
+  >   [1] [Setup] Cmd0 - learn unique ID
+──▶ TX  [Setup] Cmd0 - learn unique ID  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  [Setup] Cmd0 - learn unique ID  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 2E 00 61 F6 61 F6 01 75
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [2] [Setup] Cmd7 - save original polling address
+──▶ TX  [Setup] Cmd7 - save original polling address  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 07 00 CE
+◀── RX  [Setup] Cmd7 - save original polling address  (17B)
+  FF FF FF FF 86 A7 8B 01 23 45 07 04 00 00 00 01 CF
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [3] [Setup] Cmd12 - save original message
+──▶ TX  [Setup] Cmd12 - save original message  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0C 00 C5
+◀── RX  [Setup] Cmd12 - save original message  (39B)
+  FF FF FF FF 86 A7 8B 01 23 45 0C 1A 00 00 09 53 D3 80 80 52 53 78 13 30 15 85 80 41 56 24 31 60 10 53 4F 82 08 20 DC
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [4] [Setup] Cmd13 - save original tag/descriptor/date
+──▶ TX  [Setup] Cmd13 - save original tag/descriptor/date  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0D 00 C4
+◀── RX  [Setup] Cmd13 - save original tag/descriptor/date  (36B)
+  FF FF FF FF 86 A7 8B 01 23 45 0D 17 00 00 09 53 D3 7F 4E 31 4C F3 45 80 41 53 0D 22 50 50 F4 A0 0D 0B 7E 35
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [5] [Setup] Cmd16 - save original final assembly no.
+──▶ TX  [Setup] Cmd16 - save original final assembly no.  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 10 00 D9
+◀── RX  [Setup] Cmd16 - save original final assembly no.  (18B)
+  FF FF FF FF 86 A7 8B 01 23 45 10 05 00 00 00 00 00 D8
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [6] [Setup] Cmd20 - save original long tag
+──▶ TX  [Setup] Cmd20 - save original long tag  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 14 00 DD
+◀── RX  [Setup] Cmd20 - save original long tag  (47B)
+  FF FF FF FF 86 A7 8B 01 23 45 14 22 00 00 45 63 74 72 6F 6E 20 42 61 63 6B 20 55 70 20 4F 76 65 72 73 70 65 65 64 20 4D 6F 6E 69 74 6F 72 D1
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [7] [Setup] Cmd18 - write test tag/descriptor/date
+──▶ TX  [Setup] Cmd18 - write test tag/descriptor/date  (35B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 12 15 54 13 14 04 7C 31 54 13 20 0C F3 86 3D 23 41 38 31 60 06 0B 7E 8F
+◀── RX  [Setup] Cmd18 - write test tag/descriptor/date  (36B)
+  FF FF FF FF 86 A7 8B 01 23 45 12 17 00 00 54 13 14 04 7C 31 54 13 20 0C F3 86 3D 23 41 38 31 60 06 0B 7E 89
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [8] [Setup] Cmd22 - write test long tag
+──▶ TX  [Setup] Cmd22 - write test long tag  (46B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 16 20 55 41 4C 2D 43 4F 4E 46 4F 52 4D 41 4E 43 45 2D 4C 4F 4E 47 2D 54 41 47 2D 30 30 30 31 20 20 20 83
+◀── RX  [Setup] Cmd22 - write test long tag  (47B)
+  FF FF FF FF 86 A7 8B 01 23 45 16 22 00 40 55 41 4C 2D 43 4F 4E 46 4F 52 4D 41 4E 43 45 2D 4C 4F 4E 47 2D 54 41 47 2D 30 30 30 31 20 20 20 C5
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [9] [3.1 UAL000] Cmd0
+──▶ TX  [3.1 UAL000] Cmd0  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  [3.1 UAL000] Cmd0  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 30 00 61 F6 61 F6 01 60
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [10] [3.1 UAL000] Cmd1
+──▶ TX  [3.1 UAL000] Cmd1  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 01 00 C8
+◀── RX  [3.1 UAL000] Cmd1  (20B)
+  FF FF FF FF 86 A7 8B 01 23 45 01 07 00 40 39 00 00 00 00 B2
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [11] [3.1 UAL000] Cmd2
+──▶ TX  [3.1 UAL000] Cmd2  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 02 00 CB
+◀── RX  [3.1 UAL000] Cmd2  (23B)
+  FF FF FF FF 86 A7 8B 01 23 45 02 0A 00 40 40 80 00 00 00 00 00 00 45
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [12] [3.1 UAL000] Cmd3
+──▶ TX  [3.1 UAL000] Cmd3  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 03 00 CA
+◀── RX  [3.1 UAL000] Cmd3  (39B)
+  FF FF FF FF 86 A7 8B 01 23 45 03 1A 00 40 40 80 00 00 39 00 00 00 00 39 42 B4 00 00 39 41 20 00 00 34 3E 84 9D 1B F2
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [13] [3.1 UAL000] Cmd6
+──▶ TX  [3.1 UAL000] Cmd6  (16B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 06 02 00 01 CC
+◀── RX  [3.1 UAL000] Cmd6  (17B)
+  FF FF FF FF 86 A7 8B 01 23 45 06 04 00 40 00 01 8E
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [14] [3.1 UAL000] Cmd7
+──▶ TX  [3.1 UAL000] Cmd7  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 07 00 CE
+◀── RX  [3.1 UAL000] Cmd7  (17B)
+  FF FF FF FF 86 A7 8B 01 23 45 07 04 00 40 00 01 8F
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [15] [3.1 UAL000] Cmd8
+──▶ TX  [3.1 UAL000] Cmd8  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 08 00 C1
+◀── RX  [3.1 UAL000] Cmd8  (19B)
+  FF FF FF FF 86 A7 8B 01 23 45 08 06 00 40 00 00 00 46 C5
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [16] [3.1 UAL000] Cmd9
+──▶ TX  [3.1 UAL000] Cmd9  (18B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 09 04 00 01 02 03 C4
+◀── RX  [3.1 UAL000] Cmd9  (52B)
+  FF FF FF FF 86 A7 8B 01 23 45 09 27 00 40 00 00 00 39 00 00 00 00 C0 01 00 39 42 B4 00 00 C0 02 00 39 41 20 00 00 C0 03 46 34 3E 85 37 1D C0 01 C9 5B C0 BD
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [17] [3.1 UAL000] Cmd11
+──▶ TX  [3.1 UAL000] Cmd11  (20B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0B 06 54 13 14 04 7C 31 DE
+◀── RX  [3.1 UAL000] Cmd11  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 0B 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 31 00 61 F6 61 F6 01 6A
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [18] [3.1 UAL000] Cmd12
+──▶ TX  [3.1 UAL000] Cmd12  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0C 00 C5
+◀── RX  [3.1 UAL000] Cmd12  (39B)
+  FF FF FF FF 86 A7 8B 01 23 45 0C 1A 00 40 09 53 D3 80 80 52 53 78 13 30 15 85 80 41 56 24 31 60 10 53 4F 82 08 20 9C
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [19] [3.1 UAL000] Cmd13
+──▶ TX  [3.1 UAL000] Cmd13  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0D 00 C4
+◀── RX  [3.1 UAL000] Cmd13  (36B)
+  FF FF FF FF 86 A7 8B 01 23 45 0D 17 00 40 54 13 14 04 7C 31 54 13 20 0C F3 86 3D 23 41 38 31 60 06 0B 7E D6
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [20] [3.1 UAL000] Cmd14
+──▶ TX  [3.1 UAL000] Cmd14  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0E 00 C7
+◀── RX  [3.1 UAL000] Cmd14  (31B)
+  FF FF FF FF 86 A7 8B 01 23 45 0E 12 00 40 00 00 00 39 7F A0 00 00 7F A0 00 00 7F A0 00 00 77
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [21] [3.1 UAL000] Cmd15
+──▶ TX  [3.1 UAL000] Cmd15  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0F 00 C6
+◀── RX  [3.1 UAL000] Cmd15  (33B)
+  FF FF FF FF 86 A7 8B 01 23 45 0F 14 00 40 00 00 39 42 F0 00 00 00 00 00 00 00 00 00 00 FB FA 00 1C
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [22] [3.1 UAL000] Cmd16
+──▶ TX  [3.1 UAL000] Cmd16  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 10 00 D9
+◀── RX  [3.1 UAL000] Cmd16  (18B)
+  FF FF FF FF 86 A7 8B 01 23 45 10 05 00 40 00 00 00 98
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [23] [3.1 UAL000] Cmd17
+──▶ TX  [3.1 UAL000] Cmd17  (38B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 11 18 54 13 20 0C F3 86 3D 23 41 38 31 60 50 54 D4 80 D1 53 4C 11 C5 82 08 20 08
+◀── RX  [3.1 UAL000] Cmd17  (39B)
+  FF FF FF FF 86 A7 8B 01 23 45 11 1A 00 40 54 13 20 0C F3 86 3D 23 41 38 31 60 50 54 D4 80 D1 53 4C 11 C5 82 08 20 4E
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [24] [3.1 UAL000] Cmd18
+──▶ TX  [3.1 UAL000] Cmd18  (35B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 12 15 54 13 14 04 7C 31 54 13 20 0C F3 86 3D 23 41 38 31 60 06 0B 7E 8F
+◀── RX  [3.1 UAL000] Cmd18  (36B)
+  FF FF FF FF 86 A7 8B 01 23 45 12 17 00 40 54 13 14 04 7C 31 54 13 20 0C F3 86 3D 23 41 38 31 60 06 0B 7E C9
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [25] [3.1 UAL000] Cmd19
+──▶ TX  [3.1 UAL000] Cmd19  (17B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 13 03 01 23 45 BE
+◀── RX  [3.1 UAL000] Cmd19  (18B)
+  FF FF FF FF 86 A7 8B 01 23 45 13 05 00 40 01 23 45 FC
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [26] [3.1 UAL000] Cmd20
+──▶ TX  [3.1 UAL000] Cmd20  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 14 00 DD
+◀── RX  [3.1 UAL000] Cmd20  (47B)
+  FF FF FF FF 86 A7 8B 01 23 45 14 22 00 40 55 41 4C 2D 43 4F 4E 46 4F 52 4D 41 4E 43 45 2D 4C 4F 4E 47 2D 54 41 47 2D 30 30 30 31 20 20 20 C7
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [27] [3.1 UAL000] Cmd21
+──▶ TX  [3.1 UAL000] Cmd21  (46B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 15 20 55 41 4C 2D 43 4F 4E 46 4F 52 4D 41 4E 43 45 2D 4C 4F 4E 47 2D 54 41 47 2D 30 30 30 31 20 20 20 80
+◀── RX  [3.1 UAL000] Cmd21  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 15 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 34 00 61 F6 61 F6 01 71
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [28] [3.1 UAL000] Cmd22
+──▶ TX  [3.1 UAL000] Cmd22  (46B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 16 20 55 41 4C 2D 43 4F 4E 46 4F 52 4D 41 4E 43 45 2D 4C 4F 4E 47 2D 54 41 47 2D 30 30 30 31 20 20 20 83
+◀── RX  [3.1 UAL000] Cmd22  (47B)
+  FF FF FF FF 86 A7 8B 01 23 45 16 22 00 40 55 41 4C 2D 43 4F 4E 46 4F 52 4D 41 4E 43 45 2D 4C 4F 4E 47 2D 54 41 47 2D 30 30 30 31 20 20 20 C5
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [29] [3.1 UAL000] Cmd38
+──▶ TX  [3.1 UAL000] Cmd38  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 26 00 EF
+◀── RX  [3.1 UAL000] Cmd38  (17B)
+  FF FF FF FF 86 A7 8B 01 23 45 26 04 00 00 01 35 DB
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [30] [3.1 UAL000] Cmd48
+──▶ TX  [3.1 UAL000] Cmd48  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 30 00 F9
+◀── RX  [3.1 UAL000] Cmd48  (29B)
+  FF FF FF FF 86 A7 8B 01 23 45 30 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ED
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [31] [3.2 UAL001] Cmd1 - PV (short)
+──▶ TX  [3.2 UAL001] Cmd1 - PV (short)  (10B)
+  FF FF FF FF FF 02 80 01 00 83
+◀── RX  [3.2 UAL001] Cmd1 - PV (short)  (16B)
+  FF FF FF FF 06 80 01 07 00 00 39 00 00 00 00 B9
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [32] [3.2 UAL001] Cmd1 - PV (long)
+──▶ TX  [3.2 UAL001] Cmd1 - PV (long)  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 01 00 C8
+◀── RX  [3.2 UAL001] Cmd1 - PV (long)  (20B)
+  FF FF FF FF 86 A7 8B 01 23 45 01 07 00 00 39 00 00 00 00 F2
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [33] [3.2 UAL001] Cmd2 - current/%range
+──▶ TX  [3.2 UAL001] Cmd2 - current/%range  (10B)
+  FF FF FF FF FF 02 80 02 00 80
+◀── RX  [3.2 UAL001] Cmd2 - current/%range  (19B)
+  FF FF FF FF 06 80 02 0A 00 00 40 80 00 00 00 00 00 00 4E
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [34] [3.2 UAL001] Cmd2 (long)
+──▶ TX  [3.2 UAL001] Cmd2 (long)  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 02 00 CB
+◀── RX  [3.2 UAL001] Cmd2 (long)  (23B)
+  FF FF FF FF 86 A7 8B 01 23 45 02 0A 00 00 40 80 00 00 00 00 00 00 05
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [35] [3.2 UAL001] Cmd3 - dynamic vars
+──▶ TX  [3.2 UAL001] Cmd3 - dynamic vars  (10B)
+  FF FF FF FF FF 02 80 03 00 81
+◀── RX  [3.2 UAL001] Cmd3 - dynamic vars  (35B)
+  FF FF FF FF 06 80 03 1A 00 00 40 80 00 00 39 00 00 00 00 39 42 B4 00 00 39 41 20 00 00 34 3E 88 5B C0 E8
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [36] [3.2 UAL001] Cmd3 (long)
+──▶ TX  [3.2 UAL001] Cmd3 (long)  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 03 00 CA
+◀── RX  [3.2 UAL001] Cmd3 (long)  (39B)
+  FF FF FF FF 86 A7 8B 01 23 45 03 1A 00 00 40 80 00 00 39 00 00 00 00 39 42 B4 00 00 39 41 20 00 00 34 3E 88 85 FC 41
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [37] [3.3 UAL003] Cmd7 - read loop config (before)
+──▶ TX  [3.3 UAL003] Cmd7 - read loop config (before)  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 07 00 CE
+◀── RX  [3.3 UAL003] Cmd7 - read loop config (before)  (17B)
+  FF FF FF FF 86 A7 8B 01 23 45 07 04 00 00 00 01 CF
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [38] [3.3 UAL003] Cmd0 - config counter (before Cmd6)
+──▶ TX  [3.3 UAL003] Cmd0 - config counter (before Cmd6)  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  [3.3 UAL003] Cmd0 - config counter (before Cmd6)  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 35 00 61 F6 61 F6 01 25
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [39] [3.3 UAL003] Cmd6 - write poll addr = 1
+──▶ TX  [3.3 UAL003] Cmd6 - write poll addr = 1  (16B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 06 02 01 01 CD
+◀── RX  [3.3 UAL003] Cmd6 - write poll addr = 1  (17B)
+  FF FF FF FF 86 A7 8B 01 23 45 06 04 00 00 01 01 CF
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [40] [3.3 UAL003] Cmd7 - confirm new address
+──▶ TX  [3.3 UAL003] Cmd7 - confirm new address  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 07 00 CE
+◀── RX  [3.3 UAL003] Cmd7 - confirm new address  (17B)
+  FF FF FF FF 86 A7 8B 01 23 45 07 04 00 40 01 01 8E
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [41] [3.3 UAL003] Cmd0 short @ new addr 1
+──▶ TX  [3.3 UAL003] Cmd0 short @ new addr 1  (10B)
+  FF FF FF FF FF 02 81 00 00 83
+◀── RX  [3.3 UAL003] Cmd0 short @ new addr 1  (33B)
+  FF FF FF FF 06 81 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 36 00 61 F6 61 F6 01 2C
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [42] [3.3 UAL003] Cmd6 - restore original poll addr
+──▶ TX  [3.3 UAL003] Cmd6 - restore original poll addr  (16B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 06 02 00 01 CC
+◀── RX  [3.3 UAL003] Cmd6 - restore original poll addr  (17B)
+  FF FF FF FF 86 A7 8B 01 23 45 06 04 00 40 00 01 8E
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [43] [3.3 UAL003] Cmd7 - confirm restored
+──▶ TX  [3.3 UAL003] Cmd7 - confirm restored  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 07 00 CE
+◀── RX  [3.3 UAL003] Cmd7 - confirm restored  (17B)
+  FF FF FF FF 86 A7 8B 01 23 45 07 04 00 40 00 01 8F
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [44] [3.3 UAL003] Cmd0 short @ restored addr
+──▶ TX  [3.3 UAL003] Cmd0 short @ restored addr  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  [3.3 UAL003] Cmd0 short @ restored addr  (33B)
+  FF FF FF FF 06 80 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 37 00 61 F6 61 F6 01 2C
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [45] [3.4 UAL004] Cmd11 - matching tag (long)
+──▶ TX  [3.4 UAL004] Cmd11 - matching tag (long)  (20B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0B 06 54 13 14 04 7C 31 DE
+◀── RX  [3.4 UAL004] Cmd11 - matching tag (long)  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 0B 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 37 00 61 F6 61 F6 01 6C
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [46] [3.4 UAL004] Cmd0 - compare with Cmd11
+──▶ TX  [3.4 UAL004] Cmd0 - compare with Cmd11  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  [3.4 UAL004] Cmd0 - compare with Cmd11  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 37 00 61 F6 61 F6 01 67
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [47] [3.5 UAL005] Cmd12 - read message (before)
+──▶ TX  [3.5 UAL005] Cmd12 - read message (before)  (10B)
+  FF FF FF FF FF 02 80 0C 00 8E
+◀── RX  [3.5 UAL005] Cmd12 - read message (before)  (35B)
+  FF FF FF FF 06 80 0C 1A 00 40 54 13 20 0C F3 86 3D 23 41 38 31 60 50 54 D4 80 D1 53 4C 11 C5 82 08 20 18
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [48] [3.5 UAL005] Cmd17 - write message
+──▶ TX  [3.5 UAL005] Cmd17 - write message  (34B)
+  FF FF FF FF FF 02 80 11 18 54 13 20 0C F3 86 3D 23 41 38 31 60 50 54 D4 80 D1 53 4C 11 C5 82 08 20 43
+◀── RX  [3.5 UAL005] Cmd17 - write message  (35B)
+  FF FF FF FF 06 80 11 1A 00 40 54 13 20 0C F3 86 3D 23 41 38 31 60 50 54 D4 80 D1 53 4C 11 C5 82 08 20 05
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [49] [3.5 UAL005] Cmd12 - read back
+──▶ TX  [3.5 UAL005] Cmd12 - read back  (10B)
+  FF FF FF FF FF 02 80 0C 00 8E
+◀── RX  [3.5 UAL005] Cmd12 - read back  (35B)
+  FF FF FF FF 06 80 0C 1A 00 40 54 13 20 0C F3 86 3D 23 41 38 31 60 50 54 D4 80 D1 53 4C 11 C5 82 08 20 18
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [50] [3.6 UAL006] Cmd13 - read tag/desc/date (before)
+──▶ TX  [3.6 UAL006] Cmd13 - read tag/desc/date (before)  (10B)
+  FF FF FF FF FF 02 80 0D 00 8F
+◀── RX  [3.6 UAL006] Cmd13 - read tag/desc/date (before)  (32B)
+  FF FF FF FF 06 80 0D 17 00 40 54 13 14 04 7C 31 54 13 20 0C F3 86 3D 23 41 38 31 60 06 0B 7E 9D
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [51] [3.6 UAL006] Cmd18 - write tag/desc/date
+──▶ TX  [3.6 UAL006] Cmd18 - write tag/desc/date  (31B)
+  FF FF FF FF FF 02 80 12 15 54 13 14 04 7C 31 54 13 20 0C F3 86 3D 23 41 38 31 60 06 0B 7E C4
+◀── RX  [3.6 UAL006] Cmd18 - write tag/desc/date  (32B)
+  FF FF FF FF 06 80 12 17 00 40 54 13 14 04 7C 31 54 13 20 0C F3 86 3D 23 41 38 31 60 06 0B 7E 82
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [52] [3.6 UAL006] Cmd13 - read back
+──▶ TX  [3.6 UAL006] Cmd13 - read back  (10B)
+  FF FF FF FF FF 02 80 0D 00 8F
+◀── RX  [3.6 UAL006] Cmd13 - read back  (32B)
+  FF FF FF FF 06 80 0D 17 00 40 54 13 14 04 7C 31 54 13 20 0C F3 86 3D 23 41 38 31 60 06 0B 7E 9D
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [53] [3.7 UAL007] Cmd14 - PV transducer info
+──▶ TX  [3.7 UAL007] Cmd14 - PV transducer info  (10B)
+  FF FF FF FF FF 02 80 0E 00 8C
+◀── RX  [3.7 UAL007] Cmd14 - PV transducer info  (27B)
+  FF FF FF FF 06 80 0E 12 00 40 00 00 00 39 7F A0 00 00 7F A0 00 00 7F A0 00 00 3C
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [54] [3.7 UAL007] Cmd14 (long)
+──▶ TX  [3.7 UAL007] Cmd14 (long)  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0E 00 C7
+◀── RX  [3.7 UAL007] Cmd14 (long)  (31B)
+  FF FF FF FF 86 A7 8B 01 23 45 0E 12 00 40 00 00 00 39 7F A0 00 00 7F A0 00 00 7F A0 00 00 77
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [55] [3.7 UAL007] Cmd15 - output info
+──▶ TX  [3.7 UAL007] Cmd15 - output info  (10B)
+  FF FF FF FF FF 02 80 0F 00 8D
+◀── RX  [3.7 UAL007] Cmd15 - output info  (29B)
+  FF FF FF FF 06 80 0F 14 00 40 00 00 39 42 F0 00 00 00 00 00 00 00 00 00 00 FB FA 00 57
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [56] [3.7 UAL007] Cmd15 (long)
+──▶ TX  [3.7 UAL007] Cmd15 (long)  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0F 00 C6
+◀── RX  [3.7 UAL007] Cmd15 (long)  (33B)
+  FF FF FF FF 86 A7 8B 01 23 45 0F 14 00 40 00 00 39 42 F0 00 00 00 00 00 00 00 00 00 00 FB FA 00 1C
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [57] [3.8 UAL008] Cmd16 - read final assembly (before)
+──▶ TX  [3.8 UAL008] Cmd16 - read final assembly (before)  (10B)
+  FF FF FF FF FF 02 80 10 00 92
+◀── RX  [3.8 UAL008] Cmd16 - read final assembly (before)  (14B)
+  FF FF FF FF 06 80 10 05 00 40 01 23 45 B4
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [58] [3.8 UAL008] Cmd19 - write final assembly
+──▶ TX  [3.8 UAL008] Cmd19 - write final assembly  (13B)
+  FF FF FF FF FF 02 80 13 03 01 23 45 F5
+◀── RX  [3.8 UAL008] Cmd19 - write final assembly  (14B)
+  FF FF FF FF 06 80 13 05 00 40 01 23 45 B7
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [59] [3.8 UAL008] Cmd16 - read back
+──▶ TX  [3.8 UAL008] Cmd16 - read back  (10B)
+  FF FF FF FF FF 02 80 10 00 92
+◀── RX  [3.8 UAL008] Cmd16 - read back  (14B)
+  FF FF FF FF 06 80 10 05 00 40 01 23 45 B4
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [60] [3.9 UAL009] Cmd15 - read write-protect code
+──▶ TX  [3.9 UAL009] Cmd15 - read write-protect code  (10B)
+  FF FF FF FF FF 02 80 0F 00 8D
+◀── RX  [3.9 UAL009] Cmd15 - read write-protect code  (29B)
+  FF FF FF FF 06 80 0F 14 00 40 00 00 39 42 F0 00 00 00 00 00 00 00 00 00 00 FB FA 00 57
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [61] [3.9 UAL009] Cmd6 write attempt
+──▶ TX  [3.9 UAL009] Cmd6 write attempt  (16B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 06 02 00 01 CC
+◀── RX  [3.9 UAL009] Cmd6 write attempt  (17B)
+  FF FF FF FF 86 A7 8B 01 23 45 06 04 00 40 00 01 8E
+  >      Result: PASS - OK (RC 0, status 0x40) | info: Write protect is OFF (code 251) - writes succeeded; RC 7 behaviour NOT tested. Enable write protect and rerun.
+  >   [62] [3.9 UAL009] Cmd17 write attempt
+──▶ TX  [3.9 UAL009] Cmd17 write attempt  (34B)
+  FF FF FF FF FF 02 80 11 18 54 13 20 0C F3 86 3D 23 41 38 31 60 50 54 D4 80 D1 53 4C 11 C5 82 08 20 43
+◀── RX  [3.9 UAL009] Cmd17 write attempt  (35B)
+  FF FF FF FF 06 80 11 1A 00 40 54 13 20 0C F3 86 3D 23 41 38 31 60 50 54 D4 80 D1 53 4C 11 C5 82 08 20 05
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [63] [3.9 UAL009] Cmd18 write attempt
+──▶ TX  [3.9 UAL009] Cmd18 write attempt  (31B)
+  FF FF FF FF FF 02 80 12 15 54 13 14 04 7C 31 54 13 20 0C F3 86 3D 23 41 38 31 60 06 0B 7E C4
+◀── RX  [3.9 UAL009] Cmd18 write attempt  (32B)
+  FF FF FF FF 06 80 12 17 00 40 54 13 14 04 7C 31 54 13 20 0C F3 86 3D 23 41 38 31 60 06 0B 7E 82
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [64] [3.9 UAL009] Cmd19 write attempt
+──▶ TX  [3.9 UAL009] Cmd19 write attempt  (13B)
+  FF FF FF FF FF 02 80 13 03 01 23 45 F5
+◀── RX  [3.9 UAL009] Cmd19 write attempt  (14B)
+  FF FF FF FF 06 80 13 05 00 40 01 23 45 B7
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [65] [3.9 UAL009] Cmd22 write attempt
+──▶ TX  [3.9 UAL009] Cmd22 write attempt  (46B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 16 20 55 41 4C 2D 43 4F 4E 46 4F 52 4D 41 4E 43 45 2D 4C 4F 4E 47 2D 54 41 47 2D 30 30 30 31 20 20 20 83
+◀── RX  [3.9 UAL009] Cmd22 write attempt  (47B)
+  FF FF FF FF 86 A7 8B 01 23 45 16 22 00 40 55 41 4C 2D 43 4F 4E 46 4F 52 4D 41 4E 43 45 2D 4C 4F 4E 47 2D 54 41 47 2D 30 30 30 31 20 20 20 C5
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [66] [3.9 UAL009] Cmd0 - verify still alive
+──▶ TX  [3.9 UAL009] Cmd0 - verify still alive  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  [3.9 UAL009] Cmd0 - verify still alive  (33B)
+  FF FF FF FF 06 80 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 3F 00 61 F6 61 F6 01 24
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [67] [3.10 UAL010] Cmd0 - check cold start bit
+──▶ TX  [3.10 UAL010] Cmd0 - check cold start bit  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  [3.10 UAL010] Cmd0 - check cold start bit  (33B)
+  FF FF FF FF 06 80 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 3F 00 61 F6 61 F6 01 24
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [68] [3.10 UAL010] Cmd0 - bit must be clear
+──▶ TX  [3.10 UAL010] Cmd0 - bit must be clear  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  [3.10 UAL010] Cmd0 - bit must be clear  (33B)
+  FF FF FF FF 06 80 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 3F 00 61 F6 61 F6 01 24
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [69] [3.11 UAL011] Cmd9 - slots 0..3
+──▶ TX  [3.11 UAL011] Cmd9 - slots 0..3  (14B)
+  FF FF FF FF FF 02 80 09 04 00 01 02 03 8F
+◀── RX  [3.11 UAL011] Cmd9 - slots 0..3  (48B)
+  FF FF FF FF 06 80 09 27 00 40 00 00 00 39 00 00 00 00 C0 01 00 39 42 B4 00 00 C0 02 00 39 41 20 00 00 C0 03 46 34 3E 8D E2 9A C0 01 E7 1F C0 C6
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [70] [3.11 UAL011] Cmd9 - dynamic vars PV/SV/TV/QV (246..249)
+──▶ TX  [3.11 UAL011] Cmd9 - dynamic vars PV/SV/TV/QV (246..249)  (14B)
+  FF FF FF FF FF 02 80 09 04 F6 F7 F8 F9 8F
+◀── RX  [3.11 UAL011] Cmd9 - dynamic vars PV/SV/TV/QV (246..249)  (48B)
+  FF FF FF FF 06 80 09 27 00 40 00 F6 00 39 00 00 00 00 C0 F7 00 39 42 B4 00 00 C0 F8 00 39 41 20 00 00 C0 F9 46 34 3E 8E 10 7A C0 01 E7 BD 40 F5
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [71] [3.11 UAL011] Cmd9 - single var
+──▶ TX  [3.11 UAL011] Cmd9 - single var  (11B)
+  FF FF FF FF FF 02 80 09 01 00 8A
+◀── RX  [3.11 UAL011] Cmd9 - single var  (24B)
+  FF FF FF FF 06 80 09 0F 00 40 00 00 00 39 00 00 00 00 C0 01 E8 59 80 09
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [72] [3.11 UAL011] Cmd9 (long)
+──▶ TX  [3.11 UAL011] Cmd9 (long)  (18B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 09 04 00 01 02 03 C4
+◀── RX  [3.11 UAL011] Cmd9 (long)  (52B)
+  FF FF FF FF 86 A7 8B 01 23 45 09 27 00 40 00 00 00 39 00 00 00 00 C0 01 00 39 42 B4 00 00 C0 02 00 39 41 20 00 00 C0 03 46 34 3E 8E 65 4F C0 01 E8 E0 80 6C
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [73] [3.12 UAL012] Cmd8 - dynamic variable classification
+──▶ TX  [3.12 UAL012] Cmd8 - dynamic variable classification  (10B)
+  FF FF FF FF FF 02 80 08 00 8A
+◀── RX  [3.12 UAL012] Cmd8 - dynamic variable classification  (15B)
+  FF FF FF FF 06 80 08 06 00 40 00 00 00 46 8E
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [74] [3.12 UAL012] Cmd8 (long)
+──▶ TX  [3.12 UAL012] Cmd8 (long)  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 08 00 C1
+◀── RX  [3.12 UAL012] Cmd8 (long)  (19B)
+  FF FF FF FF 86 A7 8B 01 23 45 08 06 00 40 00 00 00 46 C5
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [75] [3.13 UAL013] Cmd20 - read long tag (before)
+──▶ TX  [3.13 UAL013] Cmd20 - read long tag (before)  (10B)
+  FF FF FF FF FF 02 80 14 00 96
+◀── RX  [3.13 UAL013] Cmd20 - read long tag (before)  (43B)
+  FF FF FF FF 06 80 14 22 00 40 55 41 4C 2D 43 4F 4E 46 4F 52 4D 41 4E 43 45 2D 4C 4F 4E 47 2D 54 41 47 2D 30 30 30 31 20 20 20 8C
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [76] [3.13 UAL013] Cmd22 - write long tag
+──▶ TX  [3.13 UAL013] Cmd22 - write long tag  (46B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 16 20 55 41 4C 2D 43 4F 4E 46 4F 52 4D 41 4E 43 45 2D 4C 4F 4E 47 2D 54 41 47 2D 30 30 30 31 20 20 20 83
+◀── RX  [3.13 UAL013] Cmd22 - write long tag  (47B)
+  FF FF FF FF 86 A7 8B 01 23 45 16 22 00 40 55 41 4C 2D 43 4F 4E 46 4F 52 4D 41 4E 43 45 2D 4C 4F 4E 47 2D 54 41 47 2D 30 30 30 31 20 20 20 C5
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [77] [3.13 UAL013] Cmd20 - read back
+──▶ TX  [3.13 UAL013] Cmd20 - read back  (10B)
+  FF FF FF FF FF 02 80 14 00 96
+◀── RX  [3.13 UAL013] Cmd20 - read back  (43B)
+  FF FF FF FF 06 80 14 22 00 40 55 41 4C 2D 43 4F 4E 46 4F 52 4D 41 4E 43 45 2D 4C 4F 4E 47 2D 54 41 47 2D 30 30 30 31 20 20 20 8C
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [78] [3.14 UAL014] Cmd0 (short)
+──▶ TX  [3.14 UAL014] Cmd0 (short)  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  [3.14 UAL014] Cmd0 (short)  (33B)
+  FF FF FF FF 06 80 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 40 00 61 F6 61 F6 01 5B
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [79] [3.14 UAL014] Cmd0 (long)
+──▶ TX  [3.14 UAL014] Cmd0 (long)  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  [3.14 UAL014] Cmd0 (long)  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 40 00 61 F6 61 F6 01 10
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [80] [3.14 UAL014] Cmd0 (secondary master)
+──▶ TX  [3.14 UAL014] Cmd0 (secondary master)  (10B)
+  FF FF FF FF FF 02 00 00 00 02
+◀── RX  [3.14 UAL014] Cmd0 (secondary master)  (33B)
+  FF FF FF FF 06 00 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 40 00 61 F6 61 F6 01 DB
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [81] [3.15 UAL015] Cmd21 - matching long tag
+──▶ TX  [3.15 UAL015] Cmd21 - matching long tag  (46B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 15 20 55 41 4C 2D 43 4F 4E 46 4F 52 4D 41 4E 43 45 2D 4C 4F 4E 47 2D 54 41 47 2D 30 30 30 31 20 20 20 80
+◀── RX  [3.15 UAL015] Cmd21 - matching long tag  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 15 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 40 00 61 F6 61 F6 01 05
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [82] [3.15 UAL015] Cmd0 - compare with Cmd21
+──▶ TX  [3.15 UAL015] Cmd0 - compare with Cmd21  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  [3.15 UAL015] Cmd0 - compare with Cmd21  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 40 00 61 F6 61 F6 01 10
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [83] [3.16 UAL038] Cmd0 - config-changed bit (before)
+──▶ TX  [3.16 UAL038] Cmd0 - config-changed bit (before)  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  [3.16 UAL038] Cmd0 - config-changed bit (before)  (33B)
+  FF FF FF FF 06 80 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 40 00 61 F6 61 F6 01 5B
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [84] [3.16 UAL038] Cmd38 - reset configuration changed flag
+──▶ TX  [3.16 UAL038] Cmd38 - reset configuration changed flag  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 26 00 EF
+◀── RX  [3.16 UAL038] Cmd38 - reset configuration changed flag  (17B)
+  FF FF FF FF 86 A7 8B 01 23 45 26 04 00 00 01 40 AE
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [85] [3.16 UAL038] Cmd0 - config-changed bit must be clear
+──▶ TX  [3.16 UAL038] Cmd0 - config-changed bit must be clear  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  [3.16 UAL038] Cmd0 - config-changed bit must be clear  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 40 00 61 F6 61 F6 01 1B
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [86] [3.17 UAL048] Cmd48 - additional device status
+──▶ TX  [3.17 UAL048] Cmd48 - additional device status  (10B)
+  FF FF FF FF FF 02 80 30 00 B2
+◀── RX  [3.17 UAL048] Cmd48 - additional device status  (25B)
+  FF FF FF FF 06 80 30 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A6
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [87] [3.17 UAL048] Cmd48 (long)
+──▶ TX  [3.17 UAL048] Cmd48 (long)  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 30 00 F9
+◀── RX  [3.17 UAL048] Cmd48 (long)  (29B)
+  FF FF FF FF 86 A7 8B 01 23 45 30 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ED
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [88] [3.17 UAL048] Cmd0 - 'More status available' bit
+──▶ TX  [3.17 UAL048] Cmd0 - 'More status available' bit  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  [3.17 UAL048] Cmd0 - 'More status available' bit  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 40 00 61 F6 61 F6 01 1B
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [89] [Restore] Cmd6 - original polling address
+──▶ TX  [Restore] Cmd6 - original polling address  (16B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 06 02 00 01 CC
+◀── RX  [Restore] Cmd6 - original polling address  (17B)
+  FF FF FF FF 86 A7 8B 01 23 45 06 04 00 00 00 01 CE
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [90] [Restore] Cmd17 - original message
+──▶ TX  [Restore] Cmd17 - original message  (38B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 11 18 09 53 D3 80 80 52 53 78 13 30 15 85 80 41 56 24 31 60 10 53 4F 82 08 20 C7
+◀── RX  [Restore] Cmd17 - original message  (39B)
+  FF FF FF FF 86 A7 8B 01 23 45 11 1A 00 40 09 53 D3 80 80 52 53 78 13 30 15 85 80 41 56 24 31 60 10 53 4F 82 08 20 81
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [91] [Restore] Cmd18 - original tag/descriptor/date
+──▶ TX  [Restore] Cmd18 - original tag/descriptor/date  (35B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 12 15 09 53 D3 7F 4E 31 4C F3 45 80 41 53 0D 22 50 50 F4 A0 0D 0B 7E 2C
+◀── RX  [Restore] Cmd18 - original tag/descriptor/date  (36B)
+  FF FF FF FF 86 A7 8B 01 23 45 12 17 00 40 09 53 D3 7F 4E 31 4C F3 45 80 41 53 0D 22 50 50 F4 A0 0D 0B 7E 6A
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [92] [Restore] Cmd19 - original final assembly no.
+──▶ TX  [Restore] Cmd19 - original final assembly no.  (17B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 13 03 00 00 00 D9
+◀── RX  [Restore] Cmd19 - original final assembly no.  (18B)
+  FF FF FF FF 86 A7 8B 01 23 45 13 05 00 40 00 00 00 9B
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [93] [Restore] Cmd22 - original long tag
+──▶ TX  [Restore] Cmd22 - original long tag  (46B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 16 20 45 63 74 72 6F 6E 20 42 61 63 6B 20 55 70 20 4F 76 65 72 73 70 65 65 64 20 4D 6F 6E 69 74 6F 72 D5
+◀── RX  [Restore] Cmd22 - original long tag  (47B)
+  FF FF FF FF 86 A7 8B 01 23 45 16 22 00 40 45 63 74 72 6F 6E 20 42 61 63 6B 20 55 70 20 4F 76 65 72 73 70 65 65 64 20 4D 6F 6E 69 74 6F 72 93
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [94] [Restore] Cmd38 - clear config-changed flag
+──▶ TX  [Restore] Cmd38 - clear config-changed flag  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 26 00 EF
+◀── RX  [Restore] Cmd38 - clear config-changed flag  (17B)
+  FF FF FF FF 86 A7 8B 01 23 45 26 04 00 00 01 45 AB
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [95] [Restore] Cmd0 - final check
+──▶ TX  [Restore] Cmd0 - final check  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  [Restore] Cmd0 - final check  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 45 00 61 F6 61 F6 01 1E
+  >      Result: PASS - OK (RC 0, status 0x00)
+  > ═══ SCENARIO 17 DONE: Done: 95/95 OK, 0 failed ═══
+
+
+  > ═══ SCENARIO 20 START [17/17]: Common Practice Command Conformance (BUOS) ═══
+  >   [1] Cmd0 short addr - discover device
+──▶ TX  Cmd0 short addr - discover device  (10B)
+  FF FF FF FF FF 02 80 00 00 82
+◀── RX  Cmd0 short addr - discover device  (33B)
+  FF FF FF FF 06 80 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 45 00 61 F6 61 F6 01 1E
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [2] [Setup] Cmd0 - counter, preambles
+──▶ TX  [Setup] Cmd0 - counter, preambles  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  [Setup] Cmd0 - counter, preambles  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 45 00 61 F6 61 F6 01 55
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [3] [Setup] Cmd14 - original PV transducer S/N
+──▶ TX  [Setup] Cmd14 - original PV transducer S/N  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0E 00 C7
+◀── RX  [Setup] Cmd14 - original PV transducer S/N  (31B)
+  FF FF FF FF 86 A7 8B 01 23 45 0E 12 00 00 00 00 00 39 7F A0 00 00 7F A0 00 00 7F A0 00 00 37
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [4] [Setup] Cmd1 - PV units
+──▶ TX  [Setup] Cmd1 - PV units  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 01 00 C8
+◀── RX  [Setup] Cmd1 - PV units  (20B)
+  FF FF FF FF 86 A7 8B 01 23 45 01 07 00 00 39 00 00 00 00 F2
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [5] [33] Cmd33 - 4 Device Variables 0..3
+──▶ TX  [33] Cmd33 - 4 Device Variables 0..3  (18B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 21 04 00 01 02 03 EC
+◀── RX  [33] Cmd33 - 4 Device Variables 0..3  (39B)
+  FF FF FF FF 86 A7 8B 01 23 45 21 1A 00 00 00 39 00 00 00 00 01 39 42 B4 00 00 02 39 41 20 00 00 03 34 3E 93 4D C7 4B
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [6] [33] Cmd33 - 1 slot -> 6 bytes
+──▶ TX  [33] Cmd33 - 1 slot -> 6 bytes  (15B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 21 01 00 E9
+◀── RX  [33] Cmd33 - 1 slot -> 6 bytes  (21B)
+  FF FF FF FF 86 A7 8B 01 23 45 21 08 00 00 00 39 00 00 00 00 DD
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [7] [33] Cmd33 - 2 slots -> 12 bytes
+──▶ TX  [33] Cmd33 - 2 slots -> 12 bytes  (16B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 21 02 01 02 E9
+◀── RX  [33] Cmd33 - 2 slots -> 12 bytes  (27B)
+  FF FF FF FF 86 A7 8B 01 23 45 21 0E 00 00 01 39 42 B4 00 00 02 39 41 20 00 00 76
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [8] [33] Cmd33 - 3 slots -> 18 bytes
+──▶ TX  [33] Cmd33 - 3 slots -> 18 bytes  (17B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 21 03 03 F4 F5 E9
+◀── RX  [33] Cmd33 - 3 slots -> 18 bytes  (33B)
+  FF FF FF FF 86 A7 8B 01 23 45 21 14 00 00 03 34 3E 93 C6 4B F4 39 00 00 00 00 F5 27 40 80 00 00 30
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [9] [33] Cmd33 - PV..QV codes 246-249
+──▶ TX  [33] Cmd33 - PV..QV codes 246-249  (18B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 21 04 F6 F7 F8 F9 EC
+◀── RX  [33] Cmd33 - PV..QV codes 246-249  (39B)
+  FF FF FF FF 86 A7 8B 01 23 45 21 1A 00 00 F6 39 00 00 00 00 F7 39 42 B4 00 00 F8 39 41 20 00 00 F9 34 3E 93 F0 E4 D5
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [10] [33] Cmd33 - unsupported code -> units 250, NaN
+──▶ TX  [33] Cmd33 - unsupported code -> units 250, NaN  (15B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 21 01 64 8D
+◀── RX  [33] Cmd33 - unsupported code -> units 250, NaN  (21B)
+  FF FF FF FF 86 A7 8B 01 23 45 21 08 00 00 64 FA 7F A0 00 00 A5
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [11] [33] Cmd33 - no request bytes -> RC 5
+──▶ TX  [33] Cmd33 - no request bytes -> RC 5  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 21 00 E8
+◀── RX  [33] Cmd33 - no request bytes -> RC 5  (15B)
+  FF FF FF FF 86 A7 8B 01 23 45 21 02 05 00 EB
+  >      Result: PASS - OK (RC 5, status 0x00)
+  >   [12] [50] Cmd50 - Dynamic Variable assignments
+──▶ TX  [50] Cmd50 - Dynamic Variable assignments  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 32 00 FB
+◀── RX  [50] Cmd50 - Dynamic Variable assignments  (19B)
+  FF FF FF FF 86 A7 8B 01 23 45 32 06 00 00 00 01 02 03 F9
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [13] [54] Cmd54 - Device Variable 0
+──▶ TX  [54] Cmd54 - Device Variable 0  (15B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 36 01 00 FE
+◀── RX  [54] Cmd54 - Device Variable 0  (43B)
+  FF FF FF FF 86 A7 8B 01 23 45 36 1E 00 00 00 00 00 00 39 7F A0 00 00 7F A0 00 00 00 00 00 00 7F A0 00 00 00 FA 00 00 00 07 00 FE
+  >      Result: PASS - OK (RC 0, status 0x00) | info: classification 0 (Not Yet Classified)
+  >   [14] [54] Cmd54 - Device Variable 1
+──▶ TX  [54] Cmd54 - Device Variable 1  (15B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 36 01 01 FF
+◀── RX  [54] Cmd54 - Device Variable 1  (43B)
+  FF FF FF FF 86 A7 8B 01 23 45 36 1E 00 00 01 00 00 00 39 7F A0 00 00 7F A0 00 00 00 00 00 00 7F A0 00 00 00 FA FF FF FF FF 00 F8
+  >      Result: PASS - OK (RC 0, status 0x00) | info: classification 0 (Not Yet Classified)
+  >   [15] [54] Cmd54 - Device Variable 2
+──▶ TX  [54] Cmd54 - Device Variable 2  (15B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 36 01 02 FC
+◀── RX  [54] Cmd54 - Device Variable 2  (43B)
+  FF FF FF FF 86 A7 8B 01 23 45 36 1E 00 00 02 00 00 00 39 7F A0 00 00 7F A0 00 00 00 00 00 00 7F A0 00 00 00 FA FF FF FF FF 00 FB
+  >      Result: PASS - OK (RC 0, status 0x00) | info: classification 0 (Not Yet Classified)
+  >   [16] [54] Cmd54 - Device Variable 3
+──▶ TX  [54] Cmd54 - Device Variable 3  (15B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 36 01 03 FD
+◀── RX  [54] Cmd54 - Device Variable 3  (43B)
+  FF FF FF FF 86 A7 8B 01 23 45 36 1E 00 00 03 00 00 00 34 7F A0 00 00 7F A0 00 00 00 00 00 00 7F A0 00 00 46 FA 00 00 01 40 00 F0
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [17] [54] Cmd54 - code 246 (PV)
+──▶ TX  [54] Cmd54 - code 246 (PV)  (15B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 36 01 F6 08
+◀── RX  [54] Cmd54 - code 246 (PV)  (43B)
+  FF FF FF FF 86 A7 8B 01 23 45 36 1E 00 00 F6 00 00 00 39 7F A0 00 00 7F A0 00 00 00 00 00 00 7F A0 00 00 00 FA 00 00 00 07 00 08
+  >      Result: PASS - OK (RC 0, status 0x00) | info: classification 0 (Not Yet Classified)
+  >   [18] [54] Cmd54 - unsupported code -> RC 2
+──▶ TX  [54] Cmd54 - unsupported code -> RC 2  (15B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 36 01 64 9A
+◀── RX  [54] Cmd54 - unsupported code -> RC 2  (15B)
+  FF FF FF FF 86 A7 8B 01 23 45 36 02 02 00 FB
+  >      Result: PASS - OK (RC 2, status 0x00)
+  >   [19] [54] Cmd54 - no request bytes -> RC 5
+──▶ TX  [54] Cmd54 - no request bytes -> RC 5  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 36 00 FF
+◀── RX  [54] Cmd54 - no request bytes -> RC 5  (15B)
+  FF FF FF FF 86 A7 8B 01 23 45 36 02 05 00 FC
+  >      Result: PASS - OK (RC 5, status 0x00)
+  >   [20] [41] Cmd41 - Perform Self-Test
+──▶ TX  [41] Cmd41 - Perform Self-Test  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 29 00 E0
+◀── RX  [41] Cmd41 - Perform Self-Test  (15B)
+  FF FF FF FF 86 A7 8B 01 23 45 29 02 00 00 E6
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [21] [41] Cmd48 - self-test results
+──▶ TX  [41] Cmd48 - self-test results  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 30 00 F9
+◀── RX  [41] Cmd48 - self-test results  (29B)
+  FF FF FF FF 86 A7 8B 01 23 45 30 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ED
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [22] [44] Cmd44 - current PV units accepted
+──▶ TX  [44] Cmd44 - current PV units accepted  (15B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 2C 01 39 DD
+◀── RX  [44] Cmd44 - current PV units accepted  (16B)
+  FF FF FF FF 86 A7 8B 01 23 45 2C 03 00 00 39 DB
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [23] [44] Cmd44 - units 250 (Not Used) -> RC 2
+──▶ TX  [44] Cmd44 - units 250 (Not Used) -> RC 2  (15B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 2C 01 FA 1E
+◀── RX  [44] Cmd44 - units 250 (Not Used) -> RC 2  (15B)
+  FF FF FF FF 86 A7 8B 01 23 45 2C 02 02 00 E1
+  >      Result: PASS - OK (RC 2, status 0x00)
+  >   [24] [44] Cmd44 - no request bytes -> RC 5
+──▶ TX  [44] Cmd44 - no request bytes -> RC 5  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 2C 00 E5
+◀── RX  [44] Cmd44 - no request bytes -> RC 5  (15B)
+  FF FF FF FF 86 A7 8B 01 23 45 2C 02 05 00 E6
+  >      Result: PASS - OK (RC 5, status 0x00)
+  >   [25] [44] Cmd1 - PV units unchanged
+──▶ TX  [44] Cmd1 - PV units unchanged  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 01 00 C8
+◀── RX  [44] Cmd1 - PV units unchanged  (20B)
+  FF FF FF FF 86 A7 8B 01 23 45 01 07 00 00 39 00 00 00 00 F2
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [26] [49] Cmd0 - counter before Cmd49
+──▶ TX  [49] Cmd0 - counter before Cmd49  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  [49] Cmd0 - counter before Cmd49  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 00 18 00 00 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 45 00 61 F6 61 F6 01 55
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [27] [49] Cmd49 - write transducer S/N 0x123456
+──▶ TX  [49] Cmd49 - write transducer S/N 0x123456  (17B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 31 03 12 34 56 8B
+◀── RX  [49] Cmd49 - write transducer S/N 0x123456  (18B)
+  FF FF FF FF 86 A7 8B 01 23 45 31 05 00 00 12 34 56 89
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [28] [49] Cmd0 - counter +1, Config Changed set
+──▶ TX  [49] Cmd0 - counter +1, Config Changed set  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  [49] Cmd0 - counter +1, Config Changed set  (37B)
+  FF FF FF FF 86 A7 8B 01 23 45 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 05 03 01 46 00 61 F6 61 F6 01 16
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [29] [49] Cmd14 - PV transducer S/N
+──▶ TX  [49] Cmd14 - PV transducer S/N  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 0E 00 C7
+◀── RX  [49] Cmd14 - PV transducer S/N  (31B)
+  FF FF FF FF 86 A7 8B 01 23 45 0E 12 00 40 12 34 56 39 7F A0 00 00 7F A0 00 00 7F A0 00 00 07
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [30] [49] Cmd54 - transducer S/N of Device Variable 0
+──▶ TX  [49] Cmd54 - transducer S/N of Device Variable 0  (15B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 36 01 00 FE
+◀── RX  [49] Cmd54 - transducer S/N of Device Variable 0  (43B)
+  FF FF FF FF 86 A7 8B 01 23 45 36 1E 00 40 00 12 34 56 39 7F A0 00 00 7F A0 00 00 00 00 00 00 7F A0 00 00 00 FA 00 00 00 07 00 CE
+  >      Result: PASS - OK (RC 0, status 0x40) | info: classification 0 (Not Yet Classified)
+  >   [31] [49] Cmd49 - 2 bytes -> RC 5
+──▶ TX  [49] Cmd49 - 2 bytes -> RC 5  (16B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 31 02 12 34 DC
+◀── RX  [49] Cmd49 - 2 bytes -> RC 5  (15B)
+  FF FF FF FF 86 A7 8B 01 23 45 31 02 05 40 BB
+  >      Result: PASS - OK (RC 5, status 0x40)
+  >   [32] [59] Cmd59 - 21 preambles -> RC 3
+──▶ TX  [59] Cmd59 - 21 preambles -> RC 3  (15B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 3B 01 15 E6
+◀── RX  [59] Cmd59 - 21 preambles -> RC 3  (15B)
+  FF FF FF FF 86 A7 8B 01 23 45 3B 02 03 40 B7
+  >      Result: PASS - OK (RC 3, status 0x40)
+  >   [33] [59] Cmd59 - 4 preambles -> RC 4
+──▶ TX  [59] Cmd59 - 4 preambles -> RC 4  (15B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 3B 01 04 F7
+◀── RX  [59] Cmd59 - 4 preambles -> RC 4  (15B)
+  FF FF FF FF 86 A7 8B 01 23 45 3B 02 04 40 B0
+  >      Result: PASS - OK (RC 4, status 0x40)
+  >   [34] [59] Cmd59 - no request bytes -> RC 5
+──▶ TX  [59] Cmd59 - no request bytes -> RC 5  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 3B 00 F2
+◀── RX  [59] Cmd59 - no request bytes -> RC 5  (15B)
+  FF FF FF FF 86 A7 8B 01 23 45 3B 02 05 40 B1
+  >      Result: PASS - OK (RC 5, status 0x40)
+  >   [35] [59] Cmd59 - 8 preambles
+──▶ TX  [59] Cmd59 - 8 preambles  (15B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 3B 01 08 FB
+◀── RX  [59] Cmd59 - 8 preambles  (19B)
+  FF FF FF FF FF FF FF 86 A7 8B 01 23 45 3B 03 00 40 08 BD
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [36] [59] Cmd0 - response preambles = 8
+──▶ TX  [59] Cmd0 - response preambles = 8  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 00 00 C9
+◀── RX  [59] Cmd0 - response preambles = 8  (40B)
+  FF FF FF FF FF FF FF 86 A7 8B 01 23 45 00 18 00 40 FE E7 8B 05 07 07 1B 28 00 01 23 45 08 03 01 47 00 61 F6 61 F6 01 1A
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [37] [NI] Cmd34 - Write PV Damping -> RC 64
+──▶ TX  [NI] Cmd34 - Write PV Damping -> RC 64  (18B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 22 04 00 00 00 00 EF
+◀── RX  [NI] Cmd34 - Write PV Damping -> RC 64  (18B)
+  FF FF FF FF FF FF FF 86 A7 8B 01 23 45 22 02 40 40 ED
+  >      Result: PASS - OK (RC 64, status 0x40)
+  >   [38] [NI] Cmd35 - Write PV Range Values -> RC 64
+──▶ TX  [NI] Cmd35 - Write PV Range Values -> RC 64  (23B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 23 09 39 42 F0 00 00 00 00 00 00 68
+◀── RX  [NI] Cmd35 - Write PV Range Values -> RC 64  (18B)
+  FF FF FF FF FF FF FF 86 A7 8B 01 23 45 23 02 40 40 EC
+  >      Result: PASS - OK (RC 64, status 0x40)
+  >   [39] [NI] Cmd36 - Set PV Upper Range Value -> RC 64
+──▶ TX  [NI] Cmd36 - Set PV Upper Range Value -> RC 64  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 24 00 ED
+◀── RX  [NI] Cmd36 - Set PV Upper Range Value -> RC 64  (18B)
+  FF FF FF FF FF FF FF 86 A7 8B 01 23 45 24 02 40 40 EB
+  >      Result: PASS - OK (RC 64, status 0x40)
+  >   [40] [NI] Cmd37 - Set PV Lower Range Value -> RC 64
+──▶ TX  [NI] Cmd37 - Set PV Lower Range Value -> RC 64  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 25 00 EC
+◀── RX  [NI] Cmd37 - Set PV Lower Range Value -> RC 64  (18B)
+  FF FF FF FF FF FF FF 86 A7 8B 01 23 45 25 02 40 40 EA
+  >      Result: PASS - OK (RC 64, status 0x40)
+  >   [41] [NI] Cmd40 - Enter Fixed Current Mode 4 mA -> RC 64
+──▶ TX  [NI] Cmd40 - Enter Fixed Current Mode 4 mA -> RC 64  (18B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 28 04 40 80 00 00 25
+◀── RX  [NI] Cmd40 - Enter Fixed Current Mode 4 mA -> RC 64  (18B)
+  FF FF FF FF FF FF FF 86 A7 8B 01 23 45 28 02 40 40 E7
+  >      Result: PASS - OK (RC 64, status 0x40)
+  >   [42] [NI] Cmd45 - Trim Loop Current Zero (after Cmd40 4 mA) -> RC 64
+──▶ TX  [NI] Cmd45 - Trim Loop Current Zero (after Cmd40 4 mA) -> RC 64  (18B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 2D 04 40 80 00 00 20
+◀── RX  [NI] Cmd45 - Trim Loop Current Zero (after Cmd40 4 mA) -> RC 64  (18B)
+  FF FF FF FF FF FF FF 86 A7 8B 01 23 45 2D 02 40 40 E2
+  >      Result: PASS - OK (RC 64, status 0x40)
+  >   [43] [NI] Cmd40 - Enter Fixed Current Mode 20 mA -> RC 64
+──▶ TX  [NI] Cmd40 - Enter Fixed Current Mode 20 mA -> RC 64  (18B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 28 04 41 A0 00 00 04
+◀── RX  [NI] Cmd40 - Enter Fixed Current Mode 20 mA -> RC 64  (18B)
+  FF FF FF FF FF FF FF 86 A7 8B 01 23 45 28 02 40 40 E7
+  >      Result: PASS - OK (RC 64, status 0x40)
+  >   [44] [NI] Cmd46 - Trim Loop Current Gain (after Cmd40 20 mA) -> RC 64
+──▶ TX  [NI] Cmd46 - Trim Loop Current Gain (after Cmd40 20 mA) -> RC 64  (18B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 2E 04 41 A0 00 00 02
+◀── RX  [NI] Cmd46 - Trim Loop Current Gain (after Cmd40 20 mA) -> RC 64  (18B)
+  FF FF FF FF FF FF FF 86 A7 8B 01 23 45 2E 02 40 40 E1
+  >      Result: PASS - OK (RC 64, status 0x40)
+  >   [45] [NI] Cmd40 - Exit Fixed Current Mode -> RC 64
+──▶ TX  [NI] Cmd40 - Exit Fixed Current Mode -> RC 64  (18B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 28 04 00 00 00 00 E5
+◀── RX  [NI] Cmd40 - Exit Fixed Current Mode -> RC 64  (18B)
+  FF FF FF FF FF FF FF 86 A7 8B 01 23 45 28 02 40 40 E7
+  >      Result: PASS - OK (RC 64, status 0x40)
+  >   [46] [NI] Cmd43 - Set PV Zero -> RC 64
+──▶ TX  [NI] Cmd43 - Set PV Zero -> RC 64  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 2B 00 E2
+◀── RX  [NI] Cmd43 - Set PV Zero -> RC 64  (18B)
+  FF FF FF FF FF FF FF 86 A7 8B 01 23 45 2B 02 40 40 E4
+  >      Result: PASS - OK (RC 64, status 0x40)
+  >   [47] [NI] Cmd47 - Write PV Transfer Function (linear) -> RC 64
+──▶ TX  [NI] Cmd47 - Write PV Transfer Function (linear) -> RC 64  (15B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 2F 01 00 E7
+◀── RX  [NI] Cmd47 - Write PV Transfer Function (linear) -> RC 64  (18B)
+  FF FF FF FF FF FF FF 86 A7 8B 01 23 45 2F 02 40 40 E0
+  >      Result: PASS - OK (RC 64, status 0x40)
+  >   [48] [NI] Cmd51 - Write Dynamic Variable Assignments -> RC 64
+──▶ TX  [NI] Cmd51 - Write Dynamic Variable Assignments -> RC 64  (18B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 33 04 00 01 02 03 FE
+◀── RX  [NI] Cmd51 - Write Dynamic Variable Assignments -> RC 64  (18B)
+  FF FF FF FF FF FF FF 86 A7 8B 01 23 45 33 02 40 40 FC
+  >      Result: PASS - OK (RC 64, status 0x40)
+  >   [49] [NI] Cmd108 - Write Burst Mode Command Number (Cmd1) -> RC 64
+──▶ TX  [NI] Cmd108 - Write Burst Mode Command Number (Cmd1) -> RC 64  (17B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 6C 03 00 01 00 A7
+◀── RX  [NI] Cmd108 - Write Burst Mode Command Number (Cmd1) -> RC 64  (18B)
+  FF FF FF FF FF FF FF 86 A7 8B 01 23 45 6C 02 40 40 A3
+  >      Result: PASS - OK (RC 64, status 0x40)
+  >   [50] [NI] Cmd109 - Burst Mode Control (enable) -> RC 64
+──▶ TX  [NI] Cmd109 - Burst Mode Control (enable) -> RC 64  (16B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 6D 02 01 00 A7
+◀── RX  [NI] Cmd109 - Burst Mode Control (enable) -> RC 64  (18B)
+  FF FF FF FF FF FF FF 86 A7 8B 01 23 45 6D 02 40 40 A2
+  >      Result: PASS - OK (RC 64, status 0x40)
+  >   [51] [NI] Cmd2 - device still answers, loop current not fixed
+──▶ TX  [NI] Cmd2 - device still answers, loop current not fixed  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 02 00 CB
+◀── RX  [NI] Cmd2 - device still answers, loop current not fixed  (26B)
+  FF FF FF FF FF FF FF 86 A7 8B 01 23 45 02 0A 00 40 40 80 00 00 00 00 00 00 45
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [52] [Restore] Cmd49 - original transducer S/N
+──▶ TX  [Restore] Cmd49 - original transducer S/N  (17B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 31 03 00 00 00 FB
+◀── RX  [Restore] Cmd49 - original transducer S/N  (21B)
+  FF FF FF FF FF FF FF 86 A7 8B 01 23 45 31 05 00 40 00 00 00 B9
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [53] [Restore] Cmd59 - original response preambles
+──▶ TX  [Restore] Cmd59 - original response preambles  (15B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 3B 01 05 F6
+◀── RX  [Restore] Cmd59 - original response preambles  (16B)
+  FF FF FF FF 86 A7 8B 01 23 45 3B 03 00 40 05 B0
+  >      Result: PASS - OK (RC 0, status 0x40)
+  >   [54] [Restore] Cmd38 primary - clear Config Changed
+──▶ TX  [Restore] Cmd38 primary - clear Config Changed  (14B)
+  FF FF FF FF FF 82 A7 8B 01 23 45 26 00 EF
+◀── RX  [Restore] Cmd38 primary - clear Config Changed  (17B)
+  FF FF FF FF 86 A7 8B 01 23 45 26 04 00 00 01 49 A7
+  >      Result: PASS - OK (RC 0, status 0x00)
+  >   [55] [Restore] Cmd38 secondary - clear Config Changed
+──▶ TX  [Restore] Cmd38 secondary - clear Config Changed  (14B)
+  FF FF FF FF FF 82 27 8B 01 23 45 26 00 6F
+◀── RX  [Restore] Cmd38 secondary - clear Config Changed  (17B)
+  FF FF FF FF 86 27 8B 01 23 45 26 04 00 00 01 49 27
+  >      Result: PASS - OK (RC 0, status 0x00)
+  > ═══ SCENARIO 20 DONE: Done: 55/55 OK, 0 failed ═══
+
+  > ═══ RUN ALL: PASS - 17/17 scenarios passed ═══
+  >   PASS    6/6 steps  1 - Cold-Start Enumeration (Rockwell style)
+  >   PASS    5/5 steps  2 - Preamble Count Sweep (3/5/8/16/20)
+  >   PASS    4/4 steps  3 - Secondary Master Probe (Emerson Trex)
+  >   PASS    16/16 steps  4 - Multi-Drop Address Sweep (addr 0–15)
+  >   PASS    6/6 steps  5 - Short/Long Address Interleave
+  >   PASS    10/10 steps  6 - Rapid-Fire Stress (gap/timing)
+  >   PASS    4/4 steps  7 - Bad Checksum Injection × 3 then Valid
+  >   PASS    3/3 steps  8 - HART Revision Probe (Cmd0 → check revision byte)
+  >   PASS    11/11 steps  9 - Full PLC Session (Rockwell + Emerson combined)
+  >   PASS    5/5 steps  10 - Identity Read (Cmd12/13/14)
+  >   PASS    20/20 steps  11 - Write Commands (Cmd17/18/19) - echo, counter, restore
+  >   PASS    12/12 steps  12 - Configuration Changed per Master + Cmd38
+  >   PASS    5/5 steps  13 - Device Variable Commands (Cmd9/33)
+  >   PASS    9/9 steps  14 - Broadcast Address (long frame 00 00 00 00 00)
+  >   PASS    3/3 steps  16 - Invalid Command Exception Handling
+  >   PASS    95/95 steps  17 - Universal Command Conformance (UAL 3.1-3.17)
+  >   PASS    55/55 steps  20 - Common Practice Command Conformance (BUOS)
