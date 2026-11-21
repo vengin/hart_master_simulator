@@ -1132,6 +1132,9 @@ class HartMasterSim(QMainWindow):
         self.setStyleSheet(f.read())
     except Exception as e:
       print(f"Failed to load style.qss: {e}")
+    # Visual click feedback: briefly flash every button (see style.qss)
+    for btn in self.findChildren(QPushButton):
+      btn.clicked.connect(lambda _checked=False, b=btn: self._flash_button(b))
     self._refresh_ports()
 
     self._status_bar = QStatusBar()
@@ -1610,6 +1613,16 @@ class HartMasterSim(QMainWindow):
     self._lbl_conn_status.setStyleSheet("color: #f44336;")
     self._status_bar.showMessage("Disconnected")
     self._log_info("Disconnected")
+
+  def _flash_button(self, btn: QPushButton, ms: int = 150):
+    """Highlight btn for `ms` milliseconds (QSS: QPushButton[flash="true"])."""
+    def _set(on: bool):
+      btn.setProperty("flash", on)
+      btn.style().unpolish(btn)
+      btn.style().polish(btn)
+      btn.update()
+    _set(True)
+    QTimer.singleShot(ms, lambda: _set(False))
 
   def _send_command(self, cmd: int, data: bytes = b"", label: str = ""):
     if not self._connected:

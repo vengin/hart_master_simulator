@@ -237,3 +237,36 @@ QPushButton, QCheckBox, QRadioButton, QComboBox {
   border: 1px solid #475569;
   outline: 0;
 }
+/* Click feedback: a darker shade of each button's own colour.
+   :pressed only lasts while the mouse button is held, so HartMasterSim also
+   sets the dynamic property flash="true" for ~150 ms after every click.
+   The object-name variants are needed because e.g. QPushButton#btn_connect
+   outranks a plain QPushButton:pressed. These rules come last so they also
+   win over the :hover rules. */
+
+/* default (slate) buttons */
+QPushButton:pressed,
+QPushButton[flash="true"]:enabled {
+  background: #020617;
+  border-color: #94a3b8;
+}
+
+/* green: CONNECT, START */
+QPushButton#btn_connect:pressed,     QPushButton#btn_connect[flash="true"]:enabled,
+QPushButton#btn_poll_start:pressed,  QPushButton#btn_poll_start[flash="true"]:enabled {
+  background: #022c22;
+  border-color: #10b981;
+}
+
+/* red: DISCONNECT, STOP, ABORT */
+QPushButton#btn_disconnect:pressed,  QPushButton#btn_disconnect[flash="true"]:enabled,
+QPushButton#btn_poll_stop:pressed,   QPushButton#btn_poll_stop[flash="true"]:enabled {
+  background: #450a0a;
+  border-color: #ef4444;
+}
+
+/* blue: SEND, RUN SELECTED, RUN ALL */
+QPushButton#btn_send:pressed,        QPushButton#btn_send[flash="true"]:enabled {
+  background: #172554;
+  border-color: #3b82f6;
+}
