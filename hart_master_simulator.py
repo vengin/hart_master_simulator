@@ -648,6 +648,23 @@ class HartWorker(QThread):
                     use_long=False, unique_id=None, label=""):
     self._queue.put((address, command, data, use_long, unique_id, label))
 
+  def has_queued(self, label_prefix: str) -> bool:
+    """True if a not-yet-sent command whose label starts with label_prefix
+    is waiting in the queue."""
+    with self._queue.mutex:
+      return any(it[5].startswith(label_prefix) for it in self._queue.queue)
+
+  def drop_queued(self, label_prefix: str) -> int:
+    """Remove not-yet-sent commands whose label starts with label_prefix.
+    Returns how many were dropped. The command in flight is not affected."""
+    with self._queue.mutex:
+      kept = [it for it in self._queue.queue
+              if not it[5].startswith(label_prefix)]
+      dropped = len(self._queue.queue) - len(kept)
+      self._queue.queue.clear()
+      self._queue.queue.extend(kept)
+    return dropped
+
   def run(self):
     self._running = True
     while self._running:
@@ -701,19 +718,20 @@ class AutoPollWorker(QThread):
     super().__init__()
     self._commands = commands
     self._interval = interval_s
-    self._running = False
+    self._stop_evt = threading.Event()
 
   def run(self):
-    self._running = True
-    while self._running:
+    while not self._stop_evt.is_set():
       for addr, cmd, data in self._commands:
-        if not self._running:
+        if self._stop_evt.is_set():
           break
         self.poll_tick.emit(addr, cmd, data)
-        time.sleep(self._interval)
+        # Interruptible sleep: stop() wakes this immediately
+        if self._stop_evt.wait(self._interval):
+          break
 
   def stop(self):
-    self._running = False
+    self._stop_evt.set()
     self.wait()
 
 
@@ -1691,18 +1709,29 @@ class HartMasterSim(QMainWindow):
     interval = self._spin_poll_interval.value()
     addr = self._spin_addr.value()
     self._auto_poller = AutoPollWorker([(addr, cmd, b"")], interval)
-    self._auto_poller.poll_tick.connect(
-      lambda a, c, d: self._send_command(c, d, f"AUTO CMD {c}")
-    )
+    self._auto_poller.poll_tick.connect(self._on_autopoll_tick)
     self._auto_poller.start()
     self._btn_poll_start.setEnabled(False)
     self._btn_poll_stop.setEnabled(True)
     self._log_info(f"Auto-poll started: CMD {cmd} every {interval:.1f}s")
 
+  def _on_autopoll_tick(self, addr, cmd, data):
+    # A tick queued just before STOP can still arrive afterwards - ignore it
+    if self._auto_poller is None:
+      return
+    # Back-pressure: if the device is slower than the poll interval, don't
+    # pile up requests (they would keep going out long after STOP)
+    if self._worker.has_queued("AUTO "):
+      return
+    self._send_command(cmd, data, f"AUTO CMD {cmd}")
+
   def _stop_autopoll(self):
     if self._auto_poller:
       self._auto_poller.stop()
       self._auto_poller = None
+      dropped = self._worker.drop_queued("AUTO ")
+      self._log_info("Auto-poll stopped"
+                     + (f" ({dropped} pending request(s) dropped)" if dropped else ""))
     self._btn_poll_start.setEnabled(True)
     self._btn_poll_stop.setEnabled(False)
 
