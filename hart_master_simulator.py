@@ -17,7 +17,8 @@ from PyQt5.QtWidgets import (
   QStyledItemDelegate
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QMutex
-from PyQt5.QtGui import QFont, QColor, QPalette, QTextCursor, QFontDatabase
+from PyQt5.QtGui import (QFont, QColor, QPalette, QTextCursor, QFontDatabase,
+                         QTextBlockFormat)
 
 from scenarios import SCENARIOS
 from hart_codec import encode_packed_ascii, decode_packed_ascii
@@ -745,6 +746,8 @@ LOG_RX_ERR_COLOR = "#f87171"
 LOG_INFO_COLOR = "#fbbf24"
 LOG_DECODED_COLOR = "#93c5fd"
 LOG_MUTED = "#94a3b8"
+# Background band for odd-numbered auto-poll transactions
+LOG_AUTO_BAND_BG = "#14213d"
 
 
 # --- SCENARIO ENGINE --------------------------------------------------------
@@ -1113,7 +1116,7 @@ class HartMasterSim(QMainWindow):
 
   def __init__(self):
     super().__init__()
-    self.setWindowTitle("HART Master Simulator  v1.1.10")
+    self.setWindowTitle("HART Master Simulator  v1.1.11")
     self.setMinimumSize(1400, 750)
     self.resize(1482, 860)
 
@@ -1126,6 +1129,8 @@ class HartMasterSim(QMainWindow):
     self._connected = False
     self._unique_id = None  # 5-byte long address learned from Cmd0
     self._auto_poller = None
+    self._auto_seq = 0          # auto-poll transaction counter
+    self._log_band = None       # background of the transaction being logged
     self._scenario_runner = None
     self._run_all_queue = []
     self._run_all_total = 0
@@ -1709,6 +1714,7 @@ class HartMasterSim(QMainWindow):
     interval = self._spin_poll_interval.value()
     addr = self._spin_addr.value()
     self._auto_poller = AutoPollWorker([(addr, cmd, b"")], interval)
+    self._auto_seq = 0
     self._auto_poller.poll_tick.connect(self._on_autopoll_tick)
     self._auto_poller.start()
     self._btn_poll_start.setEnabled(False)
@@ -1723,13 +1729,15 @@ class HartMasterSim(QMainWindow):
     # pile up requests (they would keep going out long after STOP)
     if self._worker.has_queued("AUTO "):
       return
-    self._send_command(cmd, data, f"AUTO CMD {cmd}")
+    self._auto_seq += 1
+    self._send_command(cmd, data, f"AUTO CMD {cmd} #{self._auto_seq}")
 
   def _stop_autopoll(self):
     if self._auto_poller:
       self._auto_poller.stop()
       self._auto_poller = None
       dropped = self._worker.drop_queued("AUTO ")
+      self._log_band = None
       self._log_info("Auto-poll stopped"
                      + (f" ({dropped} pending request(s) dropped)" if dropped else ""))
     self._btn_poll_start.setEnabled(True)
@@ -1757,8 +1765,22 @@ class HartMasterSim(QMainWindow):
   def _on_frame_logged(self, direction: str, label: str, data: bytes, latency_ms: float):
     # Add empty line before a new TX frame to separate transfer pairs
     if direction == "TX":
+      self._log_band = None
       self._append_log("")
+      self._log_band = self._auto_band(label)
     self._log_frame(direction, label, data, latency_ms)
+
+  @staticmethod
+  def _auto_band(label: str):
+    """Odd-numbered auto-poll transactions ("AUTO CMD 1 #17") get a shaded
+    background so consecutive identical frames are easy to tell apart."""
+    if not label.startswith("AUTO "):
+      return None
+    try:
+      n = int(label.rsplit("#", 1)[1])
+    except (IndexError, ValueError):
+      return None
+    return LOG_AUTO_BAND_BG if n % 2 else None
 
   def _on_response(self, parsed: dict):
     if "error" in parsed:
@@ -1958,7 +1980,13 @@ class HartMasterSim(QMainWindow):
     fmt.setFontPointSize(10)
 
     cursor.setCharFormat(fmt)
-    cursor.insertText(text + "\n")
+    # Full-width line background (auto-poll odd/even banding)
+    bf = QTextBlockFormat()
+    if self._log_band:
+      bf.setBackground(QColor(self._log_band))
+    cursor.setBlockFormat(bf)
+    cursor.insertText(text)
+    cursor.insertBlock(QTextBlockFormat(), fmt)
     self._log.setTextCursor(cursor)
     self._log.ensureCursorVisible()
     self._log_lines += 1
